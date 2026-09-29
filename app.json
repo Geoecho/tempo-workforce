@@ -1,25 +1,28 @@
 {
   "expo": {
-    "name": "i-want-you-to-make-a",
-    "slug": "i-want-you-to-make-a",
+    "name": "Tempo",
+    "slug": "tempo-workforce",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "scheme": "tempo",
+    "icon": "./assets/tempo-icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#164B3B",
+        "foregroundImage": "./assets/tempo-icon.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": "./assets/tempo-icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      ["expo-camera", { "cameraPermission": "Allow Tempo to scan site check-in codes." }]
+    ]
   }
 }
