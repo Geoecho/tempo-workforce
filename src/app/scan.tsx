@@ -22,7 +22,7 @@ export default function Scan() {
     setResult(response);
     Haptics.notificationAsync(response.ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error).catch(() => {});
   };
-  const assigned = shifts.filter(s => s.workerIds.includes(selectedWorkerId) && s.date === today());
+  const assigned = shifts.filter(s => !s.archived && s.workerIds.includes(selectedWorkerId) && s.date === today());
   if (role !== 'worker') return <Screen title="Worker view required"><Text style={{ color: C.muted, marginBottom: 20 }}>Switch to worker view to scan a site code.</Text><Button label="Open workspace settings" onPress={() => router.push('/settings')} /></Screen>;
   return <Screen title="Scan site code" subtitle="Point your camera at the QR code displayed by your site lead.">
     {result ? <Card style={{ alignItems: 'center', paddingVertical: 30 }}>

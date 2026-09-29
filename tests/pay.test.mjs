@@ -22,4 +22,5 @@ test('uses the rate captured at check-in when the profile rate changes', () => {
   const events = [punch('in', 'a', at(8), 40), punch('out', 'a', at(10))];
   const result = paySummary(events, worker, '2026-09-29');
   assert.equal(result.earningsCents, 8000);
+  assert.equal(paySummary(events, { ...worker, archived: true }, '2026-09-29').earningsCents, 8000);
 });

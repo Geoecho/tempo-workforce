@@ -1,7 +1,8 @@
 export type Role = 'admin' | 'worker';
-export type Currency = 'PLN' | 'EUR' | 'USD' | 'GBP';
-export type Worker = { id: string; name: string; initials: string; role: string; team: string; color: string; phone?: string; hourlyRate: number };
-export type Shift = { id: string; title: string; site: string; location: string; date: string; start: string; end: string; team: string; workerIds: string[]; status: 'upcoming' | 'active' | 'completed' };
+export const CURRENCIES = ['PLN', 'EUR', 'USD', 'GBP', 'CAD', 'AUD', 'CHF', 'SEK', 'NOK', 'DKK', 'CZK', 'HUF', 'RON', 'UAH', 'AED', 'INR', 'SGD', 'JPY', 'BRL', 'MXN', 'ZAR'] as const;
+export type Currency = typeof CURRENCIES[number];
+export type Worker = { id: string; name: string; initials: string; role: string; team: string; color: string; phone?: string; hourlyRate: number; archived?: boolean };
+export type Shift = { id: string; title: string; site: string; location: string; date: string; start: string; end: string; team: string; workerIds: string[]; status: 'upcoming' | 'active' | 'completed'; archived?: boolean };
 export type Punch = { id: string; shiftId: string; workerId: string; type: 'in' | 'out'; at: string; source: 'qr' | 'demo'; rateAtCheckIn?: number };
 export type State = { role: Role; selectedWorkerId: string; currency: Currency; workers: Worker[]; shifts: Shift[]; punches: Punch[] };
 

@@ -26,9 +26,9 @@ npx vercel --prod
 2. Open **Workspace → Worker** and choose a worker assigned to today's shift.
 3. Open **Scan**. Scan the site code from a second display, or tap the same-device demo action.
 4. The first scan checks in. A later scan checks out and shows estimated pay. Review payable hours and earnings under **Hours** or **Time & attendance**.
-5. Use **Team** to call a worker through the phone's dialer, edit their rate, or open their profile. Admins can export a payroll CSV.
+5. Use **Team** to call a worker, edit their profile and rate, or remove them. Open a shift to edit its event details and crew or remove it. Admins can export a payroll CSV.
 
-The demo caps **payable time at 10 hours per worker per day across all shifts**. It rejects another check-in once the cap is reached. Changing a worker's rate does not change the rate captured at earlier check-ins. The currency can be changed before the first punch. See [brand/README.md](brand/README.md) for the logo, Instagram feed and story creatives, colors, and launch copy.
+The demo caps **payable time at 10 hours per worker per day across all shifts**. It rejects another check-in once the cap is reached. Changing a worker's rate does not change the rate captured at earlier check-ins. The app offers 21 pay currencies; the currency can be changed before the first punch. Removing a worker or shift with clock history archives it from active views while retaining the pay log. Archived records can be restored in **Workspace**. Active check-ins must be closed before removal. The interface uses short press and screen transitions, with reduced-motion support. See [brand/README.md](brand/README.md) for the logo, Instagram feed and story creatives, colors, and launch copy.
 
 Demo data, including changes, is saved on the device with AsyncStorage. **This is a local prototype:** switching roles is a preview control, not authentication; separate devices do not share data; the QR payload is client generated and can be forged. The 10 hour limit is a product preview, not a reliable fraud control. Do not use these records for real payroll or access control. Seeded phone numbers are fictional and should be replaced before trying the call button.
 
