@@ -11,14 +11,16 @@ import { C } from '../ui/theme';
 
 type ScanResult = { ok: boolean; message: string; type?: 'in' | 'out'; pay?: PaySummary };
 export default function Scan() {
-  const { role, shifts, selectedWorkerId, scan, currency } = useStore();
+  const { role, shifts, selectedWorkerId, scan, currency, online } = useStore();
   const [permission, requestPermission] = useCameraPermissions();
   const [result, setResult] = useState<ScanResult | null>(null);
   const locked = useRef(false);
-  const process = (value: string, source: 'qr' | 'demo' = 'qr') => {
+  const process = async (value: string, source: 'qr' | 'demo' = 'qr') => {
     if (locked.current) return;
     locked.current = true;
-    const response = scan(value, source);
+    let response: ScanResult;
+    try { response = await scan(value, source); }
+    catch { response = { ok: false, message: 'Could not reach the shared database. Try again.' }; }
     setResult(response);
     Haptics.notificationAsync(response.ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error).catch(() => {});
   };
@@ -37,8 +39,8 @@ export default function Scan() {
         <View pointerEvents="none" style={{ width: 190, height: 190, borderWidth: 3, borderColor: '#D6F4E1', borderRadius: 22 }} />
       </View>
       <Text style={{ color: C.muted, fontSize: 12, textAlign: 'center', marginTop: 14 }}>Align the code inside the frame</Text>
-      <Section title="Try it on this device" /><Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, marginBottom: 12 }}>Tap a shift to simulate scanning its live QR code. Pay stops accruing after 10 hours today.</Text>
-      {assigned.length ? assigned.map(s => <Pressable key={s.id} onPress={() => process(qrPayload(s.id), 'demo')}><Card style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}><View style={{ backgroundColor: C.mint, borderRadius: 11, width: 38, height: 38, alignItems: 'center', justifyContent: 'center' }}><QrCode color={C.green} size={19} /></View><View style={{ flex: 1, marginLeft: 12 }}><Text style={{ color: C.ink, fontWeight: '700', fontSize: 13 }}>{s.title}</Text><Text style={{ color: C.muted, fontSize: 11, marginTop: 2 }}>{s.site}</Text></View></Card></Pressable>) : <Card><Text style={{ color: C.muted }}>No shifts assigned today.</Text></Card>}
+      {!online && <><Section title="Try it on this device" /><Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, marginBottom: 12 }}>Tap a shift to simulate scanning its live QR code. Pay stops accruing after 10 hours today.</Text>
+      {assigned.length ? assigned.map(s => <Pressable key={s.id} onPress={() => process(qrPayload(s.id), 'demo')}><Card style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}><View style={{ backgroundColor: C.mint, borderRadius: 11, width: 38, height: 38, alignItems: 'center', justifyContent: 'center' }}><QrCode color={C.green} size={19} /></View><View style={{ flex: 1, marginLeft: 12 }}><Text style={{ color: C.ink, fontWeight: '700', fontSize: 13 }}>{s.title}</Text><Text style={{ color: C.muted, fontSize: 11, marginTop: 2 }}>{s.site}</Text></View></Card></Pressable>) : <Card><Text style={{ color: C.muted }}>No shifts assigned today.</Text></Card>}</>}
     </>}
   </Screen>;
 }

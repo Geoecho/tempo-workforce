@@ -3,13 +3,17 @@ export const CURRENCIES = ['PLN', 'EUR', 'USD', 'GBP', 'CAD', 'AUD', 'CHF', 'SEK
 export type Currency = typeof CURRENCIES[number];
 export type Worker = { id: string; name: string; initials: string; role: string; team: string; color: string; phone?: string; hourlyRate: number; archived?: boolean };
 export type Shift = { id: string; title: string; site: string; location: string; date: string; start: string; end: string; team: string; workerIds: string[]; status: 'upcoming' | 'active' | 'completed'; archived?: boolean };
-export type Punch = { id: string; shiftId: string; workerId: string; type: 'in' | 'out'; at: string; source: 'qr' | 'demo'; rateAtCheckIn?: number };
-export type State = { role: Role; selectedWorkerId: string; currency: Currency; workers: Worker[]; shifts: Shift[]; punches: Punch[] };
+export type Punch = { id: string; shiftId: string; workerId: string; type: 'in' | 'out'; at: string; source: 'qr' | 'demo'; rateAtCheckIn?: number; workDate?: string };
+export type ShiftNotification = { id: string; workerId: string; shiftId: string; kind: 'assigned' | 'changed' | 'removed'; title: string; body: string; createdAt: string; readAt: string | null };
+export type TimeApproval = { workerId: string; date: string; approvedBy: string; approvedAt: string };
+export type State = { role: Role; selectedWorkerId: string; currency: Currency; workspaceName?: string; teams?: string[]; workers: Worker[]; shifts: Shift[]; punches: Punch[] };
+export const teamNames = (state: Pick<State, 'teams' | 'workers'>): string[] =>
+  [...new Set([...(state.teams ?? []), ...state.workers.map(worker => worker.team)].filter(Boolean))];
 
 export const localDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const day = (offset: number) => { const d = new Date(); d.setDate(d.getDate() + offset); return localDate(d); };
 export const initialState: State = {
-  role: 'admin', selectedWorkerId: 'w1', currency: 'PLN',
+  role: 'admin', selectedWorkerId: 'w1', currency: 'PLN', teams: ['Production', 'Operations'],
   workers: [
     { id: 'w1', name: 'Alex Morgan', initials: 'AM', role: 'Stage crew', team: 'Production', color: '#CDE8DF', phone: '+12025550101', hourlyRate: 38 },
     { id: 'w2', name: 'Jordan Lee', initials: 'JL', role: 'Lighting tech', team: 'Production', color: '#E8DFF5', phone: '+12025550102', hourlyRate: 45 },
@@ -25,6 +29,7 @@ export const initialState: State = {
   ],
   punches: [],
 };
+export const newWorkspaceState = (name: string): State => ({ role: 'admin', selectedWorkerId: '', currency: 'EUR', workspaceName: name.trim(), teams: [], workers: [], shifts: [], punches: [] });
 
 export const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 export const today = () => localDate(new Date());
@@ -48,7 +53,7 @@ export const formatMoney = (cents: number, currency: Currency) => new Intl.Numbe
 
 export type PaySummary = { actualMinutes: number; payableMinutes: number; excessMinutes: number; actualSeconds: number; payableSeconds: number; earningsCents: number };
 export function paySummary(punches: Punch[], worker: Worker, date: string, now = Date.now()): PaySummary {
-  const events = punches.filter(p => p.workerId === worker.id && localDate(new Date(p.at)) === date).sort((a, b) => a.at.localeCompare(b.at));
+  const events = punches.filter(p => p.workerId === worker.id && (p.workDate ?? localDate(new Date(p.at))) === date).sort((a, b) => a.at.localeCompare(b.at));
   const open = new Map<string, Punch>();
   const sessions: { started: number; duration: number; rate: number }[] = [];
   for (const event of events) {

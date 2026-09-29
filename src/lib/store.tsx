@@ -1,34 +1,26 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Currency, initialState, parseQr, paySummary, Punch, Shift, State, today, uid, Worker, MAX_PAID_MINUTES_PER_DAY, PaySummary } from './data';
+import React, { useContext, useEffect, useState } from 'react';
+import { Currency, initialState, parseQr, paySummary, Punch, qrPayload, Shift, ShiftNotification, State, TimeApproval, teamNames, today, uid, Worker, MAX_PAID_MINUTES_PER_DAY } from './data';
+import { Context, Result } from './store-context';
+import { supabase } from './supabase';
+import { OnlineStoreProvider } from './online-store';
 
-type Result = { ok: boolean; message: string; type?: 'in' | 'out'; pay?: PaySummary };
-type Store = State & {
-  ready: boolean;
-  setRole: (role: State['role']) => void;
-  setSelectedWorker: (id: string) => void;
-  addWorker: (worker: Omit<Worker, 'id' | 'initials' | 'color'>) => void;
-  updateWorker: (id: string, changes: Partial<Pick<Worker, 'name' | 'role' | 'team' | 'phone' | 'hourlyRate'>>) => void;
-  removeWorker: (id: string) => void;
-  restoreWorker: (id: string) => void;
-  setCurrency: (currency: Currency) => void;
-  addShift: (shift: Omit<Shift, 'id' | 'status'>) => void;
-  updateShift: (id: string, changes: Partial<Pick<Shift, 'title' | 'site' | 'location' | 'date' | 'start' | 'end' | 'team' | 'workerIds'>>) => void;
-  removeShift: (id: string) => void;
-  restoreShift: (id: string) => void;
-  scan: (payload: string, source?: Punch['source']) => Result;
-  reset: () => void;
-};
-const Context = createContext<Store | null>(null);
-const KEY = 'tempo-demo-v2';
+export const KEY = 'tempo-demo-v2';
 
-export function StoreProvider({ children }: { children: React.ReactNode }) {
+function LocalStoreProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<State>(initialState);
+  const [notifications, setNotifications] = useState<ShiftNotification[]>([]);
+  const [approvals, setApprovals] = useState<TimeApproval[]>([]);
   const [ready, setReady] = useState(false);
   useEffect(() => { AsyncStorage.getItem(KEY).then(raw => { if (raw) { const saved = { ...initialState, ...JSON.parse(raw) } as State; saved.workers = saved.workers.map(w => ({ ...w, hourlyRate: w.hourlyRate ?? initialState.workers.find(seed => seed.id === w.id)?.hourlyRate ?? 0, phone: w.phone ?? initialState.workers.find(seed => seed.id === w.id)?.phone })); setState(saved); } }).catch(() => {}).finally(() => setReady(true)); }, []);
   useEffect(() => { if (ready) AsyncStorage.setItem(KEY, JSON.stringify(state)).catch(() => {}); }, [state, ready]);
   const setRole = (role: State['role']) => setState(s => role === 'worker' && !s.workers.some(w => !w.archived) ? s : ({ ...s, role }));
   const setSelectedWorker = (selectedWorkerId: string) => setState(s => s.workers.some(w => w.id === selectedWorkerId && !w.archived) ? ({ ...s, selectedWorkerId }) : s);
+  const addTeam = (rawName: string) => setState(s => {
+    const name = rawName.trim();
+    return !name || teamNames(s).some(team => team.toLowerCase() === name.toLowerCase())
+      ? s : { ...s, teams: [...(s.teams ?? []), name] };
+  });
   const addWorker = (worker: Omit<Worker, 'id' | 'initials' | 'color'>) => setState(s => {
     const id = uid();
     return { ...s, workers: [...s.workers, { ...worker, id, initials: worker.name.split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase(), color: '#DDEBE5' }], selectedWorkerId: s.selectedWorkerId || id };
@@ -42,6 +34,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   });
   const restoreWorker = (id: string) => setState(s => ({ ...s, workers: s.workers.map(w => w.id === id ? { ...w, archived: false } : w) }));
   const setCurrency = (currency: Currency) => setState(s => s.punches.length ? s : ({ ...s, currency }));
+  const setWorkspaceName = (rawName: string) => setState(s => rawName.trim() ? { ...s, workspaceName: rawName.trim() } : s);
   const addShift = (shift: Omit<Shift, 'id' | 'status'>) => setState(s => ({ ...s, shifts: [{ ...shift, id: uid(), status: 'upcoming' }, ...s.shifts] }));
   const updateShift = (id: string, changes: Partial<Pick<Shift, 'title' | 'site' | 'location' | 'date' | 'start' | 'end' | 'team' | 'workerIds'>>) => setState(s => ({ ...s, shifts: s.shifts.map(shift => {
     if (shift.id !== id) return shift;
@@ -71,12 +64,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       for (const p of state.punches.filter(p => p.workerId === state.selectedWorkerId)) { if (p.type === 'in') open.add(p.shiftId); else open.delete(p.shiftId); }
       if (open.size) return { ok: false, message: 'Check out of your current shift before checking in elsewhere.' };
     }
-    const punch: Punch = { id: uid(), shiftId, workerId: state.selectedWorkerId, type, at: new Date().toISOString(), source, ...(type === 'in' ? { rateAtCheckIn: worker.hourlyRate } : {}) };
+    const punch: Punch = { id: uid(), shiftId, workerId: state.selectedWorkerId, type, at: new Date().toISOString(), source, workDate: shift.date, ...(type === 'in' ? { rateAtCheckIn: worker.hourlyRate } : {}) };
     const pay = type === 'out' ? paySummary([...state.punches, punch], worker, today()) : undefined;
     setState(s => ({ ...s, punches: [...s.punches, punch] }));
+    setApprovals(current => current.filter(a => !(a.workerId === punch.workerId && a.date === punch.workDate)));
     return { ok: true, message: type === 'in' ? `Checked in to ${shift.site}` : `Checked out of ${shift.site}`, type, pay };
   };
   const reset = () => setState(initialState);
-  return <Context.Provider value={{ ...state, ready, setRole, setSelectedWorker, addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, addShift, updateShift, removeShift, restoreShift, scan, reset }}>{children}</Context.Provider>;
+  const reviewTime = async (workerId: string, date: string, approve: boolean): Promise<Result> => {
+    if (approve && !state.punches.some(p => p.workerId === workerId && (p.workDate ?? p.at.slice(0, 10)) === date)) return { ok: false, message: 'No recorded time for this day.' };
+    setApprovals(current => approve ? [...current.filter(a => !(a.workerId === workerId && a.date === date)), { workerId, date, approvedBy: 'Demo manager', approvedAt: new Date().toISOString() }] : current.filter(a => !(a.workerId === workerId && a.date === date)));
+    return { ok: true, message: approve ? 'Time approved.' : 'Approval removed.' };
+  };
+  return <Context.Provider value={{ ...state, ready, online: false, syncError: null, accountEmail: null, notifications, approvals, setRole, setSelectedWorker, addTeam, addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, setWorkspaceName, addShift, updateShift, removeShift, restoreShift, scan, issueQr: async shiftId => qrPayload(shiftId), markNotificationRead: async id => setNotifications(current => current.map(item => item.id === id ? { ...item, readAt: new Date().toISOString() } : item)), reviewTime, reset, inviteWorker: async () => ({ ok: false, message: 'Online database is not configured.' }), signOut: async () => {} }}>{children}</Context.Provider>;
+}
+export function StoreProvider({ children }: { children: React.ReactNode }) {
+  return supabase ? <OnlineStoreProvider>{children}</OnlineStoreProvider> : <LocalStoreProvider>{children}</LocalStoreProvider>;
 }
 export function useStore() { const value = useContext(Context); if (!value) throw new Error('StoreProvider missing'); return value; }

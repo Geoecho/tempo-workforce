@@ -1,41 +1,92 @@
 import { router, usePathname } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { CalendarDays, ChartNoAxesCombined, ChevronLeft, House, QrCode, Settings2, UsersRound } from 'lucide-react-native';
+import { ChevronLeft } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { AccessibilityInfo, Animated, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Worker } from '../lib/data';
 import { useStore } from '../lib/store';
+import { AppIcon, AppIconName } from './AppIcon';
 import { C } from './theme';
 
 export function Avatar({ worker, size = 36 }: { worker: Worker; size?: number }) { return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: worker.color, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: size * .32, fontWeight: '700', color: C.green }}>{worker.initials}</Text></View>; }
 export function Pill({ children, tone = 'green' }: { children: React.ReactNode; tone?: 'green' | 'gray' | 'orange' }) { return <View style={[styles.pill, { backgroundColor: tone === 'green' ? C.mint : tone === 'orange' ? C.orange : '#F1F2F0' }]}><Text style={{ color: tone === 'green' ? C.green : tone === 'orange' ? '#936C31' : C.muted, fontSize: 11, fontWeight: '700' }}>{children}</Text></View>; }
 export function Button({ label, onPress, icon, variant = 'primary', small = false }: { label: string; onPress: () => void; icon?: React.ReactNode; variant?: 'primary' | 'light' | 'outline' | 'danger'; small?: boolean }) {
   const [scale] = useState(() => new Animated.Value(1));
+  const [iconMotion] = useState(() => new Animated.Value(0));
   const [reduced, setReduced] = useState(false);
   useEffect(() => { AccessibilityInfo.isReduceMotionEnabled().then(setReduced).catch(() => {}); }, []);
-  const animate = (toValue: number) => { if (reduced) return; Animated.spring(scale, { toValue, speed: 28, bounciness: 5, useNativeDriver: Platform.OS !== 'web' }).start(); };
+  const animate = (pressed: boolean) => {
+    if (reduced) return;
+    Animated.spring(scale, { toValue: pressed ? .97 : 1, speed: 28, bounciness: 5, useNativeDriver: Platform.OS !== 'web' }).start();
+    Animated.spring(iconMotion, { toValue: pressed ? 1 : 0, speed: 26, bounciness: 7, useNativeDriver: Platform.OS !== 'web' }).start();
+  };
   const press = () => { if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {}); onPress(); };
-  return <Animated.View style={{ transform: [{ scale }] }}><Pressable accessibilityRole="button" onPress={press} onPressIn={() => animate(.97)} onPressOut={() => animate(1)} style={({ pressed }) => [styles.button, small && { minHeight: 39, paddingHorizontal: 15 }, variant === 'light' && { backgroundColor: C.mint }, variant === 'outline' && { backgroundColor: C.surface, borderWidth: 1, borderColor: C.line }, variant === 'danger' && { backgroundColor: '#FFF4F2', borderWidth: 1, borderColor: '#F4D4CE' }, pressed && { opacity: .82 }]}>{icon}<Text style={[styles.buttonText, variant !== 'primary' && { color: variant === 'danger' ? C.red : C.green }, small && { fontSize: 13 }]}>{label}</Text></Pressable></Animated.View>;
+  return <Animated.View style={{ transform: [{ scale }] }}><Pressable accessibilityRole="button" onPress={press} onPressIn={() => animate(true)} onPressOut={() => animate(false)} style={({ pressed }) => [styles.button, small && { minHeight: 39, paddingHorizontal: 15 }, variant === 'light' && { backgroundColor: C.mint }, variant === 'outline' && { backgroundColor: C.surface, borderWidth: 1, borderColor: C.line }, variant === 'danger' && { backgroundColor: '#FFF4F2', borderWidth: 1, borderColor: '#F4D4CE' }, pressed && { opacity: .82 }]}>{icon && <Animated.View style={{ transform: [{ translateY: iconMotion.interpolate({ inputRange: [0, 1], outputRange: [0, -2] }) }, { scale: iconMotion.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] }) }, { rotate: iconMotion.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-7deg'] }) }] }}>{icon}</Animated.View>}<Text style={[styles.buttonText, variant !== 'primary' && { color: variant === 'danger' ? C.red : C.green }, small && { fontSize: 13 }]}>{label}</Text></Pressable></Animated.View>;
 }
 export function Card({ children, style }: { children: React.ReactNode; style?: object }) { return <View style={[styles.card, style]}>{children}</View>; }
 export function Section({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) { return <View style={styles.section}><Text style={styles.sectionTitle}>{title}</Text>{action && <Pressable onPress={onAction}><Text style={styles.sectionAction}>{action}</Text></Pressable>}</View>; }
 export function Screen({ children, title, subtitle, back = false, action, noNav = false }: { children?: React.ReactNode; title?: string; subtitle?: string; back?: boolean; action?: React.ReactNode; noNav?: boolean }) {
   const { role } = useStore();
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 960;
   const [entrance] = useState(() => new Animated.Value(0));
   useEffect(() => { AccessibilityInfo.isReduceMotionEnabled().then(reduced => { if (reduced) entrance.setValue(1); else Animated.timing(entrance, { toValue: 1, duration: 260, useNativeDriver: Platform.OS !== 'web' }).start(); }).catch(() => entrance.setValue(1)); }, [entrance]);
-  return <SafeAreaView style={styles.safe} edges={['top', 'bottom']}><View style={styles.topbar}>{back ? <Pressable accessibilityLabel="Go back" onPress={() => router.back()} style={styles.topIcon}><ChevronLeft size={23} color={C.ink} /></Pressable> : <View style={styles.topIcon} />}<View style={{ flex: 1, alignItems: 'center' }}><Text style={styles.brand}>tempo<Text style={{ color: '#69A889' }}>.</Text></Text></View>{action ?? <View style={styles.topIcon} />}</View><ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}><Animated.View style={{ opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }}>{title && <View style={styles.pageHeading}><Text style={styles.title}>{title}</Text>{subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}</View>}{children}</Animated.View></ScrollView>{!noNav && <BottomNav role={role} />}</SafeAreaView>;
+
+  const topbar = <View style={[styles.topbar, desktop && styles.desktopTopbar]}>
+    {back ? <Pressable accessibilityLabel="Go back" onPress={() => router.back()} style={styles.topIcon}><ChevronLeft size={23} color={C.ink} /></Pressable> : !desktop && <View style={styles.topIcon} />}
+    <View style={{ flex: 1, alignItems: desktop ? 'flex-start' : 'center' }}>
+      {desktop ? <Text style={styles.desktopLocation}>{title || 'Overview'}</Text> : <Text style={styles.brand}>tempo<Text style={{ color: '#69A889' }}>.</Text></Text>}
+    </View>
+    {action ?? <View style={styles.topIcon} />}
+  </View>;
+  const content = <ScrollView contentContainerStyle={[styles.body, desktop && styles.desktopBody]} showsVerticalScrollIndicator={false}>
+    <Animated.View style={{ opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }}>
+      {title && <View style={styles.pageHeading}><Text style={styles.title}>{title}</Text>{subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}</View>}
+      {children}
+    </Animated.View>
+  </ScrollView>;
+
+  return <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    {desktop ? <View style={styles.desktopShell}>
+      {!noNav && <BottomNav role={role} desktop />}
+      <View style={styles.desktopMain}>{topbar}{content}</View>
+    </View> : <>{topbar}{content}{!noNav && <BottomNav role={role} />}</>}
+  </SafeAreaView>;
 }
-function BottomNav({ role }: { role: 'admin' | 'worker' }) {
+function BottomNav({ role, desktop = false }: { role: 'admin' | 'worker'; desktop?: boolean }) {
   const path = usePathname();
+  const [hovered, setHovered] = useState<string | null>(null);
   const tabs = role === 'admin' ? [
-    { href: '/', label: 'Home', Icon: House }, { href: '/schedule', label: 'Shifts', Icon: CalendarDays }, { href: '/team', label: 'Team', Icon: UsersRound }, { href: '/time', label: 'Time', Icon: ChartNoAxesCombined }, { href: '/settings', label: 'More', Icon: Settings2 },
+    { href: '/', label: 'Home', icon: 'home' }, { href: '/schedule', label: 'Shifts', icon: 'calendar' }, { href: '/team', label: 'Team', icon: 'team' }, { href: '/time', label: 'Time', icon: 'time' }, { href: '/settings', label: 'More', icon: 'settings' },
   ] : [
-    { href: '/', label: 'Home', Icon: House }, { href: '/schedule', label: 'Shifts', Icon: CalendarDays }, { href: '/scan', label: 'Scan', Icon: QrCode }, { href: '/time', label: 'Hours', Icon: ChartNoAxesCombined }, { href: '/settings', label: 'More', Icon: Settings2 },
+    { href: '/', label: 'Home', icon: 'home' }, { href: '/schedule', label: 'Shifts', icon: 'calendar' }, { href: '/scan', label: 'Scan', icon: 'scan' }, { href: '/time', label: 'Hours', icon: 'time' }, { href: '/settings', label: 'More', icon: 'settings' },
   ];
-  return <View style={styles.nav}>{tabs.map(({ href, label, Icon }) => <Pressable key={href} onPress={() => { if (path !== href && Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {}); router.replace(href as never); }} style={styles.navItem}><View style={[styles.navIcon, path === href && styles.navActive]}><Icon size={20} strokeWidth={path === href ? 2.5 : 1.9} color={path === href ? C.green : '#929B95'} /></View><Text style={[styles.navLabel, path === href && { color: C.green, fontWeight: '700' }]}>{label}</Text></Pressable>)}</View>;
+  return <View style={desktop ? styles.sideNav : styles.nav}>
+    {desktop && <View style={styles.sideBrandBox}><Text style={styles.brand}>tempo<Text style={{ color: '#69A889' }}>.</Text></Text><Text style={styles.sideCaption}>WORKFORCE</Text></View>}
+    {tabs.map(({ href, label, icon }) => {
+      const active = path === href || (href === '/schedule' && (path.startsWith('/shift/') || path.startsWith('/edit-shift/'))) || (href === '/team' && path.startsWith('/worker/'));
+      return <Pressable key={href} accessibilityRole="link" onHoverIn={() => setHovered(href)} onHoverOut={() => setHovered(null)} onFocus={() => setHovered(href)} onBlur={() => setHovered(null)} onPress={() => { if (path !== href && Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {}); router.replace(href as never); }} style={desktop ? [styles.sideNavItem, active && styles.sideNavActive] : styles.navItem}>
+        <View style={desktop ? styles.sideIcon : [styles.navIcon, active && styles.navActive]}><AppIcon name={icon as AppIconName} size={20} color={active ? C.green : '#929B95'} playing={hovered === href} /></View>
+        <Text style={desktop ? [styles.sideLabel, active && styles.sideLabelActive] : [styles.navLabel, active && { color: C.green, fontWeight: '700' }]}>{label}</Text>
+      </Pressable>;
+    })}
+  </View>;
 }
 export function Empty({ title, detail }: { title: string; detail: string }) { return <Card style={{ alignItems: 'center', padding: 28 }}><Text style={{ fontSize: 16, fontWeight: '700', color: C.ink }}>{title}</Text><Text style={{ color: C.muted, marginTop: 6, textAlign: 'center', lineHeight: 20 }}>{detail}</Text></Card>; }
 export const styles = StyleSheet.create({
+  desktopShell: { flex: 1, flexDirection: 'row' },
+  desktopMain: { flex: 1, minWidth: 0 },
+  desktopTopbar: { height: 64, paddingHorizontal: 36, backgroundColor: C.surface },
+  desktopLocation: { fontSize: 13, color: C.muted, fontWeight: '700' },
+  desktopBody: { maxWidth: 1040, paddingHorizontal: 36, paddingTop: 30, paddingBottom: 60 },
+  sideNav: { width: 230, backgroundColor: C.surface, borderRightWidth: 1, borderRightColor: C.line, paddingHorizontal: 14, paddingTop: 25 },
+  sideBrandBox: { paddingHorizontal: 14, marginBottom: 35 },
+  sideCaption: { color: C.muted, fontSize: 10, fontWeight: '700', letterSpacing: 1.7, marginTop: 4 },
+  sideNavItem: { height: 48, flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingHorizontal: 12, marginBottom: 5 },
+  sideNavActive: { backgroundColor: C.mint },
+  sideIcon: { width: 32, alignItems: 'flex-start' },
+  sideLabel: { fontSize: 14, color: C.muted, fontWeight: '600' },
+  sideLabelActive: { color: C.green, fontWeight: '700' },
   safe: { flex: 1, backgroundColor: C.bg }, topbar: { height: 55, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#EFF0ED', backgroundColor: C.bg }, topIcon: { width: 35, height: 35, justifyContent: 'center', alignItems: 'center' }, brand: { fontSize: 23, letterSpacing: -1.2, fontWeight: '800', color: C.ink }, body: { paddingHorizontal: 22, paddingTop: 25, paddingBottom: 42, width: '100%', maxWidth: 620, alignSelf: 'center' }, pageHeading: { marginBottom: 23 }, title: { fontSize: 28, fontWeight: '700', color: C.ink, letterSpacing: -.7 }, subtitle: { color: C.muted, marginTop: 6, fontSize: 14, lineHeight: 20 }, card: { borderRadius: 20, padding: 19, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line }, section: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 28, marginBottom: 13 }, sectionTitle: { fontSize: 18, fontWeight: '700', letterSpacing: -.3, color: C.ink }, sectionAction: { fontSize: 13, fontWeight: '700', color: C.green }, button: { minHeight: 48, borderRadius: 13, backgroundColor: C.green, paddingHorizontal: 19, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }, buttonText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 }, pill: { alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }, nav: { height: 69, paddingHorizontal: 12, backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.line, flexDirection: 'row', justifyContent: 'space-around' }, navItem: { flex: 1, alignItems: 'center', justifyContent: 'center' }, navIcon: { width: 44, height: 32, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }, navActive: { backgroundColor: C.mint }, navLabel: { marginTop: 2, fontSize: 10, color: '#929B95' },
 });

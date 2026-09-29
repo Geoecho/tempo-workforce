@@ -4,6 +4,7 @@ import { Pressable, Text, View } from 'react-native';
 import { useStore } from '../../lib/store';
 import { Avatar, Button, Card, Screen, Section } from '../../ui/components';
 import { Field } from '../../ui/Field';
+import { ShiftDateTimeFields } from '../../ui/ShiftDateTimeFields';
 import { C } from '../../ui/theme';
 import { localDate, Shift } from '../../lib/data';
 
@@ -41,8 +42,7 @@ function ShiftEditor({ shift }: { shift: Shift }) {
     <Field label="Shift / event name" value={title} onChangeText={setTitle} placeholder="e.g. Main stage setup" />
     <Field label="Site / project" value={site} onChangeText={setSite} placeholder="e.g. Northline Festival" />
     <Field label="Meeting point" value={location} onChangeText={setLocation} placeholder="e.g. East Gate" />
-    <Field label="Date (YYYY-MM-DD)" value={date} onChangeText={setDate} placeholder="2026-09-29" editable={!locked} />
-    <View style={{ flexDirection: 'row', gap: 10 }}><View style={{ flex: 1 }}><Field label="Start" value={start} onChangeText={setStart} placeholder="09:00" /></View><View style={{ flex: 1 }}><Field label="End" value={end} onChangeText={setEnd} placeholder="17:00" /></View></View>
+    <ShiftDateTimeFields date={date} onDateChange={setDate} start={start} onStartChange={setStart} end={end} onEndChange={setEnd} dateLocked={locked} />
     {locked && <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18 }}>Clock records exist for this shift, so its date and assigned crew are locked.</Text>}
     <Section title="Assigned workers" />
     <Card style={{ padding: 0, overflow: 'hidden', marginBottom: 20 }}>{available.map((w, i) => <Pressable key={w.id} disabled={locked} accessibilityRole="checkbox" accessibilityState={{ checked: selected.includes(w.id), disabled: locked }} onPress={() => toggle(w.id)} style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderTopWidth: i ? 1 : 0, borderColor: C.line, opacity: locked ? .65 : 1 }}><Avatar worker={w} size={36} /><View style={{ flex: 1, marginLeft: 11 }}><Text style={{ color: C.ink, fontWeight: '700', fontSize: 13 }}>{w.name}</Text><Text style={{ color: C.muted, fontSize: 11 }}>{w.role} · {w.team}</Text></View><View style={{ width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: C.green, backgroundColor: selected.includes(w.id) ? C.green : 'transparent' }} /></Pressable>)}</Card>

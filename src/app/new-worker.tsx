@@ -1,23 +1,26 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useStore } from '../lib/store';
 import { Button, Screen } from '../ui/components';
 import { Field } from '../ui/Field';
 import { C } from '../ui/theme';
+import { teamNames } from '../lib/data';
 
 export default function NewWorker() {
-  const { addWorker, role, workers, currency } = useStore();
+  const { team: suggestedTeam } = useLocalSearchParams<{ team?: string }>();
+  const { addWorker, role, workers, teams: savedTeams, currency } = useStore();
+  const teams = teamNames({ teams: savedTeams, workers });
   const [name, setName] = useState('');
   const [job, setJob] = useState('');
   const [phone, setPhone] = useState('');
   const [rate, setRate] = useState('');
-  const [team, setTeam] = useState('Production');
+  const [team, setTeam] = useState(teams.includes(suggestedTeam ?? '') ? suggestedTeam! : (teams[0] ?? ''));
   const [error, setError] = useState('');
-  const teams = [...new Set([...workers.map(w => w.team), 'Production', 'Operations'])];
   const save = () => {
     const hourlyRate = Number(rate.replace(',', '.'));
     if (!name.trim() || !job.trim()) return setError('Add a name and job title.');
+    if (!team) return setError('Create a team from People & teams first.');
     if (!Number.isFinite(hourlyRate) || hourlyRate <= 0 || hourlyRate > 10_000) return setError('Enter a valid hourly rate above zero.');
     addWorker({ name: name.trim(), role: job.trim(), phone: phone.trim(), team, hourlyRate: Math.round(hourlyRate * 100) / 100 });
     router.back();
