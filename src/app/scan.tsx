@@ -1,16 +1,17 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { CheckCircle2, Flashlight, FlashlightOff, QrCode, ScanLine, XCircle } from 'lucide-react-native';
 import React, { useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, Text, View } from 'react-native';
 import { formatMoney, hoursLabel, payTimeLabel, PaySummary, qrPayload, today } from '../lib/data';
+import { useFeedback } from '../lib/feedback';
 import { useStore } from '../lib/store';
 import { Button, Card, Screen, Section } from '../ui/components';
 import { C } from '../ui/theme';
 
 type ScanResult = { ok: boolean; message: string; type?: 'in' | 'out'; pay?: PaySummary };
 export default function Scan() {
+  const { play } = useFeedback();
   const { role, shifts, punches, selectedWorkerId, scan, currency, online } = useStore();
   const [permission, requestPermission] = useCameraPermissions();
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -26,7 +27,7 @@ export default function Scan() {
     catch { response = { ok: false, message: 'Could not reach the shared database. Try again.' }; }
     setResult(response);
     setBusy(false);
-    Haptics.notificationAsync(response.ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error).catch(() => {});
+    play(response.ok ? 'confirm' : 'decline');
   };
   const assigned = shifts.filter(s => !s.archived && s.workerIds.includes(selectedWorkerId) && s.date === today());
   const latestByShift = new Map(punches.filter(p => p.workerId === selectedWorkerId).sort((a, b) => a.at.localeCompare(b.at)).map(p => [p.shiftId, p]));
@@ -39,9 +40,9 @@ export default function Scan() {
       <View style={{ width: 64, height: 64, borderRadius: 22, backgroundColor: result.ok ? C.mint : '#F8E8E4', alignItems: 'center', justifyContent: 'center' }}>{result.ok ? <CheckCircle2 color={C.green} size={32} /> : <XCircle color={C.red} size={32} />}</View>
       <Text style={{ color: C.ink, fontSize: 20, fontWeight: '700', marginTop: 17 }}>{result.ok ? result.type === 'out' ? 'Shift complete' : 'You’re checked in' : 'Could not scan'}</Text>
       <Text style={{ color: C.muted, fontSize: 13, textAlign: 'center', marginTop: 8, lineHeight: 19 }}>{result.message}</Text>
+      {result.ok && <Text style={{ color: C.muted, fontSize: 11, textAlign: 'center', marginTop: 9 }}>A 45-second pause protects against accidental double scans.</Text>}
       {result.pay && <View style={{ width: '100%', backgroundColor: C.mint, borderRadius: 15, padding: 18, marginTop: 21 }}><Text style={{ color: C.green, fontSize: 11, fontWeight: '700' }}>ESTIMATED PAY TODAY</Text><Text style={{ color: C.green, fontSize: 29, fontWeight: '700', marginTop: 6 }}>{formatMoney(result.pay.earningsCents, currency)}</Text><Text style={{ color: C.green, fontSize: 12, marginTop: 4 }}>{payTimeLabel(result.pay.payableSeconds)} payable · 10h daily maximum</Text>{result.pay.excessMinutes > 0 && <Text style={{ color: C.red, fontSize: 12, marginTop: 8 }}>{hoursLabel(result.pay.excessMinutes)} over the cap needs manager review.</Text>}</View>}
       <View style={{ width: '100%', marginTop: 23 }}><Button label={result.ok ? 'Done' : 'Try again'} variant={result.ok ? 'primary' : 'light'} onPress={() => { if (result.ok) router.replace('/'); else { locked.current = false; setResult(null); } }} /></View>
-      {result.ok && <Pressable accessibilityRole="button" onPress={() => { locked.current = false; setResult(null); }} style={{ marginTop: 16, padding: 5 }}><Text style={{ color: C.green, fontWeight: '700' }}>Scan another code</Text></Pressable>}
     </Card> : <>
       <View style={{ height: 310, borderRadius: 20, overflow: 'hidden', backgroundColor: '#26352F', justifyContent: 'center', alignItems: 'center' }}>
         {permission?.granted ? <CameraView style={{ position: 'absolute', width: '100%', height: '100%' }} facing="back" enableTorch={torch} barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={busy ? undefined : ({ data }) => process(data)} /> : <View style={{ alignItems: 'center', padding: 22 }}><ScanLine size={44} color="#CFE5D8" /><Text style={{ color: '#fff', textAlign: 'center', marginTop: 13, fontWeight: '700' }}>Camera access is needed to scan</Text><View style={{ marginTop: 17 }}><Button label={permission?.canAskAgain === false ? 'Open camera settings' : 'Allow camera'} small variant="light" onPress={() => { if (permission?.canAskAgain === false) Linking.openSettings(); else requestPermission(); }} /></View></View>}

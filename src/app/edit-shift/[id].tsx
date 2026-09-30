@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useStore } from '../../lib/store';
+import { useFeedback } from '../../lib/feedback';
 import { Avatar, Button, Card, Screen, Section, SelectionMark } from '../../ui/components';
 import { Field } from '../../ui/Field';
 import { ShiftDateTimeFields } from '../../ui/ShiftDateTimeFields';
@@ -18,6 +19,7 @@ export default function EditShift() {
 }
 
 function ShiftEditor({ shift }: { shift: Shift }) {
+  const { play } = useFeedback();
   const { workers, punches, updateShift } = useStore();
   const locked = punches.some(p => p.shiftId === shift.id);
   const [title, setTitle] = useState(shift.title);
@@ -29,7 +31,7 @@ function ShiftEditor({ shift }: { shift: Shift }) {
   const [selected, setSelected] = useState(shift.workerIds);
   const [message, setMessage] = useState('');
   const available = workers.filter(w => !w.archived);
-  const toggle = (id: string) => setSelected(ids => ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]);
+  const toggle = (id: string) => { play('select'); setSelected(ids => ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]); };
   const save = () => {
     if (!title.trim() || !site.trim() || !location.trim()) return setMessage('Add a name, site, and meeting point.');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(`${date}T12:00:00`).getTime()) || localDate(new Date(`${date}T12:00:00`)) !== date) return setMessage('Use a valid date in YYYY-MM-DD format.');

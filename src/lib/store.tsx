@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useContext, useEffect, useState } from 'react';
-import { Currency, initialState, parseQr, paySummary, Punch, qrPayload, Shift, ShiftNotification, State, TimeApproval, teamNames, today, uid, Worker, MAX_PAID_MINUTES_PER_DAY } from './data';
+import { Currency, initialState, parseQr, paySummary, punchCooldownSeconds, Punch, qrPayload, Shift, ShiftNotification, State, TimeApproval, teamNames, today, uid, Worker, MAX_PAID_MINUTES_PER_DAY } from './data';
 import { Context, Result } from './store-context';
 import { supabase } from './supabase';
 import { OnlineStoreProvider } from './online-store';
@@ -55,6 +55,8 @@ function LocalStoreProvider({ children }: { children: React.ReactNode }) {
     if (!shift.workerIds.includes(state.selectedWorkerId)) return { ok: false, message: 'You are not assigned to this shift.' };
     const worker = state.workers.find(w => w.id === state.selectedWorkerId);
     if (!worker || worker.archived) return { ok: false, message: 'Worker profile not available.' };
+    const wait = punchCooldownSeconds(state.punches, state.selectedWorkerId);
+    if (wait) return { ok: false, message: `Please wait ${wait} seconds before scanning again. Your last clock action was saved.` };
     const last = [...state.punches].reverse().find(p => p.shiftId === shiftId && p.workerId === state.selectedWorkerId);
     const type = last?.type === 'in' ? 'out' : 'in';
     if (type === 'in') {

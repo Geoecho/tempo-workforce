@@ -49,6 +49,11 @@ export const durationMinutes = (punches: Punch[], shiftId?: string, workerId?: s
 export const hoursLabel = (minutes: number) => `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`;
 export const payTimeLabel = (seconds: number) => seconds > 0 && seconds < 60 ? `${seconds}s` : hoursLabel(Math.floor(seconds / 60));
 export const MAX_PAID_MINUTES_PER_DAY = 600;
+export const PUNCH_COOLDOWN_SECONDS = 45;
+export const punchCooldownSeconds = (punches: Punch[], workerId: string, now = Date.now()) => {
+  const latest = punches.filter(punch => punch.workerId === workerId).reduce<Punch | null>((current, punch) => !current || punch.at > current.at ? punch : current, null);
+  return latest ? Math.max(0, Math.ceil((PUNCH_COOLDOWN_SECONDS * 1000 - (now - new Date(latest.at).getTime())) / 1000)) : 0;
+};
 export const formatMoney = (cents: number, currency: Currency) => new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(cents / 100);
 
 export type PaySummary = { actualMinutes: number; payableMinutes: number; excessMinutes: number; actualSeconds: number; payableSeconds: number; earningsCents: number };
