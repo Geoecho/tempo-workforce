@@ -1,5 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="720" height="210" viewBox="0 0 720 210" role="img" aria-label="tempo logo">
-  <rect width="720" height="210" rx="36" fill="#F7F7F5"/>
-  <text x="56" y="151" font-family="Arial, Helvetica, sans-serif" font-size="146" font-weight="800" letter-spacing="-10" fill="#164B3B">tempo</text>
-  <circle cx="632" cy="140" r="17" fill="#9DCFB2"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="110" viewBox="0 0 420 110" role="img" aria-label="Tempo"><svg x="6" y="14" width="82" height="82" viewBox="0 0 40 40"><g fill="#202C27" transform="rotate(-22 20 20)"><rect x="8" y="12" width="6" height="16" rx="3"/><rect x="17" y="6" width="6" height="28" rx="3"/><rect x="26" y="9.5" width="6" height="21" rx="3"/></g></svg><text x="107" y="80" font-family="Arial,Helvetica,sans-serif" font-size="77" font-weight="600" letter-spacing="-4" fill="#202C27">tempo</text></svg>

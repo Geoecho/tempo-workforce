@@ -6,6 +6,7 @@ import { ShiftReminders } from '../lib/ShiftReminders';
 import { WatchSync } from '../lib/WatchSync';
 import { StoreProvider } from '../lib/store';
 import { LanguageProvider } from '../lib/i18n';
+import { WebBrandHead } from '../ui/WebBrandHead';
 
 function AppStack() { return <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: '#F7F7F5' } }}>
   <Stack.Screen name="index" options={{ animation: 'none' }} />
@@ -15,12 +16,13 @@ function AppStack() { return <Stack screenOptions={{ headerShown: false, animati
   <Stack.Screen name="time" options={{ animation: 'none' }} />
   <Stack.Screen name="settings" options={{ animation: 'none' }} />
   <Stack.Screen name="welcome" options={{ animation: 'none' }} />
+  <Stack.Screen name="start" options={{ animation: 'none' }} />
 </Stack>; }
 
 function AppContent() {
   const pathname = usePathname();
-  if (pathname === '/welcome') return <><StatusBar style="dark" /><AppStack /></>;
+  if (pathname === '/welcome' || pathname === '/start') return <><StatusBar style="dark" /><AppStack /></>;
   return <StoreProvider><StatusBar style="dark" /><AppStack /><ShiftReminders /><WatchSync /></StoreProvider>;
 }
 
-export default function Layout() { return <SafeAreaProvider><LanguageProvider><FeedbackProvider><AppContent /></FeedbackProvider></LanguageProvider></SafeAreaProvider>; }
+export default function Layout() { return <SafeAreaProvider><LanguageProvider><FeedbackProvider><WebBrandHead /><AppContent /></FeedbackProvider></LanguageProvider></SafeAreaProvider>; }

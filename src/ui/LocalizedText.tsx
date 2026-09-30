@@ -1,17 +1,19 @@
 import React from 'react';
-import { Text as NativeText, TextInput as NativeTextInput, TextInputProps, TextProps } from 'react-native';
+import { Platform, Text as NativeText, TextInput as NativeTextInput, TextInputProps, TextProps } from 'react-native';
 import { useLanguage } from '../lib/i18n';
 
 function translateChildren(children: React.ReactNode, translate: (value: string) => string): React.ReactNode {
   return React.Children.map(children, child => typeof child === 'string' ? translate(child) : child);
 }
 
-export function Text({ children, ...props }: TextProps) {
+const brandFont = { fontFamily: Platform.OS === 'web' ? 'Arial' : undefined };
+
+export function Text({ children, style, ...props }: TextProps) {
   const { t } = useLanguage();
-  return <NativeText {...props}>{translateChildren(children, t)}</NativeText>;
+  return <NativeText {...props} style={[brandFont, style]}>{translateChildren(children, t)}</NativeText>;
 }
 
-export function TextInput({ placeholder, accessibilityLabel, ...props }: TextInputProps) {
+export function TextInput({ placeholder, accessibilityLabel, style, ...props }: TextInputProps) {
   const { t } = useLanguage();
-  return <NativeTextInput {...props} placeholder={placeholder ? t(placeholder) : undefined} accessibilityLabel={accessibilityLabel ? t(accessibilityLabel) : undefined} />;
+  return <NativeTextInput {...props} style={[brandFont, style]} placeholder={placeholder ? t(placeholder) : undefined} accessibilityLabel={accessibilityLabel ? t(accessibilityLabel) : undefined} />;
 }

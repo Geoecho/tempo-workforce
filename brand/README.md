@@ -11,19 +11,21 @@
 
 | Role | Color | Hex |
 | --- | --- | --- |
-| Primary | Forest green | `#164B3B` |
-| Background | Warm off-white | `#F7F7F5` |
-| Accent | Soft mint | `#9DCFB2` |
-| Card tint | Pale mint | `#E5F1EB` |
-| Body text | Deep charcoal | `#1D2421` |
+| Primary | Forest green | `#254E3D` |
+| Background | Soft off-white | `#F8F9F5` |
+| Accent | Sage | `#D5E2CB` |
+| Card tint | Pale sage | `#E9F0E2` |
+| Body text | Deep charcoal | `#202C27` |
 
-Use a bold geometric sans-serif headline, plenty of open space, and a calm editorial layout. Keep the `tempo.` wordmark lowercase. The [SVG logo](tempo-logo.svg) is the scalable version; the [app icon](app-icon.png), [feed artwork](instagram-feed.png), and [story artwork](instagram-story.png) are ready to use.
+Use regular-weight sans-serif headlines, open space, and thin separators. Keep the `tempo` wordmark lowercase, without a period. The three rounded bars lean left by 22 degrees. The [SVG logo](tempo-logo.svg) and [standalone mark](tempo-mark.svg) are scalable sources; the [app icon](app-icon.png), [feed artwork](instagram-feed.png), and [story artwork](instagram-story.png) use the same identity. Avoid neon colors, heavy headings, and decorative numbered labels.
+
+Regenerate the icon family and social artwork with `node scripts/generate-brand.cjs`. The script uses Sharp; `TEMPO_SHARP_MODULE` can point to a Sharp installation outside this repository.
 
 ## Instagram profile
 
 **Display name:** Tempo | Teams, Time & Pay  
 **Bio:** Every shift. In sync. Organize teams, track time, and see pay estimates in one calm workspace. Preview below ↓  
-**Website field:** `https://i-want-you-to-make-a-six.vercel.app/`
+**Website field:** `https://i-want-you-to-make-a-six.vercel.app/welcome`
 
 ## First feed post
 
@@ -45,4 +47,4 @@ Upload `instagram-story.png`, then add Instagram's **Link** sticker to the previ
 2. **Check-in:** Show the site QR and worker scan screens. Caption: “From arrival to checkout, every shift has a clear time record.”
 3. **Pay clarity:** Show the checkout result. Caption: “Workers see an estimated payout at checkout, with payable time capped at 10 hours per day in this preview.”
 
-For public promotion, describe Tempo as an **interactive prototype**. Its current records are stored in each browser, and the QR and pay logic are not verified by a shared server. Do not present it as a payroll or access-control product yet.
+For public promotion, describe Tempo as an **interactive prototype** and pay totals as **estimated earnings**. The public landing page uses sample records for its interactive preview; signed-in workspaces use Supabase.

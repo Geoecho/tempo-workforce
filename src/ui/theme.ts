@@ -1,1 +1,1 @@
-export const C = { bg: '#F7F7F5', surface: '#FFFFFF', ink: '#1D2421', muted: '#77817B', line: '#E7EAE6', green: '#164B3B', mint: '#E5F1EB', accent: '#D9F0E2', orange: '#F7E8D2', red: '#A64E3D' };
+export const C = { bg: '#F8F9F5', surface: '#FFFFFF', ink: '#202C27', muted: '#737E72', line: '#E2E7DD', green: '#254E3D', mint: '#E9F0E2', accent: '#D5E2CB', orange: '#F3EBDD', red: '#A34F43' };

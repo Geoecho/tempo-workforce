@@ -53,12 +53,19 @@ final class TempoWatchModel: NSObject, ObservableObject, WCSessionDelegate {
 
 struct ContentView: View {
     @StateObject private var model = TempoWatchModel()
-    private let mint = Color(red: 0.72, green: 0.93, blue: 0.75)
+    private let mint = Color(red: 0.84, green: 0.89, blue: 0.80)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("tempo.").font(.system(size: 18, weight: .bold, design: .rounded))
+                HStack(spacing: 6) {
+                    HStack(spacing: 2) {
+                        Capsule().frame(width: 4, height: 10)
+                        Capsule().frame(width: 4, height: 18)
+                        Capsule().frame(width: 4, height: 14)
+                    }.rotationEffect(.degrees(-22))
+                    Text("tempo").font(.system(size: 18, weight: .medium))
+                }
                 Spacer()
                 Circle().fill(model.status == "onShift" || model.status == "onBreak" ? mint : .gray).frame(width: 7, height: 7)
             }

@@ -50,10 +50,10 @@ export default function Schedule() {
         accessibilityRole="tab"
         accessibilityState={{ selected: filter === item }}
         style={{ backgroundColor: filter === item ? C.green : C.surface, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: filter === item ? C.green : C.line }}
-      ><Text style={{ color: filter === item ? '#fff' : C.muted, fontWeight: '700', fontSize: 13 }}>{t(item === 'upcoming' ? 'Upcoming' : 'History')}</Text></Pressable>)}
+      ><Text style={{ color: filter === item ? '#fff' : C.muted, fontWeight: '500', fontSize: 13 }}>{t(item === 'upcoming' ? 'Upcoming' : 'History')}</Text></Pressable>)}
     </View>
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 13 }}>
-      <Text style={{ color: C.ink, fontSize: 16, fontWeight: '700' }}>{filtered.length} {t('Shifts').toLowerCase()}</Text>
+      <Text style={{ color: C.ink, fontSize: 16, fontWeight: '500' }}>{filtered.length} {t('Shifts').toLowerCase()}</Text>
       {filter === 'history' ? !!filtered.length && <Button label="Export CSV" small variant="outline" icon={<Download size={16} color={C.green} />} onPress={() => void exportHistory()} /> : role === 'admin' && <Button label="New shift" small icon={<Plus size={16} color="#fff" />} onPress={() => router.push('/new-shift')} />}
     </View>
     {filtered.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>

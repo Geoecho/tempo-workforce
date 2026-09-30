@@ -2,6 +2,6 @@
 module.exports = config => ({
   type: "watch",
   icon: '../../assets/tempo-icon.png',
-  colors: { $accent: '#B7EDBE' },
+  colors: { $accent: '#D5E2CB' },
   deploymentTarget: '11.0',
 });
