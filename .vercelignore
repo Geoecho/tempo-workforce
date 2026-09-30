@@ -1,0 +1,11 @@
+.git/
+.expo/
+.vercel/
+node_modules/
+dist/
+web-build/
+android/
+ios/
+.env*.local
+*.tsbuildinfo
+npm-debug.*
