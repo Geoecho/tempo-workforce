@@ -8,12 +8,13 @@
     "icon": "./assets/tempo-icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.netaville.tempo.workforce"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#164B3B",
-        "foregroundImage": "./assets/tempo-icon.png"
+        "foregroundImage": "./assets/tempo-adaptive-icon.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -32,11 +33,19 @@
       "expo-audio",
       "expo-notifications",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Tempo to choose a team member profile photo.",
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-calendar",
         {
           "calendarPermission": "Allow Tempo to prepare your shifts in your calendar."
         }
-      ]
+      ],
+      "@bacons/apple-targets"
     ]
   }
 }

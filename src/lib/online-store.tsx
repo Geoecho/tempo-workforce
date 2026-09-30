@@ -142,7 +142,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
     const id = uid();
     return { ...s, workers: [...s.workers, { ...worker, id, initials: worker.name.split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase(), color: '#DDEBE5' }], selectedWorkerId: s.selectedWorkerId || id };
   });
-  const updateWorker = (id: string, changes: Partial<Pick<Worker, 'name' | 'role' | 'team' | 'phone' | 'hourlyRate'>>) =>
+  const updateWorker = (id: string, changes: Partial<Pick<Worker, 'name' | 'role' | 'team' | 'phone' | 'photoUri' | 'hourlyRate'>>) =>
     commit(s => ({ ...s, workers: s.workers.map(w => w.id === id ? { ...w, ...changes, initials: changes.name ? changes.name.split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase() : w.initials } : w) }));
   const removeWorker = (id: string) => commit(s => {
     if (s.shifts.some(shift => [...s.punches].reverse().find(p => p.workerId === id && p.shiftId === shift.id)?.type === 'in')) return s;
@@ -154,6 +154,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   const setCurrency = (currency: Currency) => commit(s => s.punches.length ? s : ({ ...s, currency }));
   const setWorkspaceName = (rawName: string) => commit(s => rawName.trim() ? { ...s, workspaceName: rawName.trim() } : s);
   const addShift = (shift: Omit<Shift, 'id' | 'status'>) => commit(s => ({ ...s, shifts: [{ ...shift, id: uid(), status: 'upcoming' }, ...s.shifts] }));
+  const addShifts = (shifts: Omit<Shift, 'id' | 'status'>[]) => commit(s => ({ ...s, shifts: [...shifts.map(shift => ({ ...shift, id: uid(), status: 'upcoming' as const })), ...s.shifts] }));
   const updateShift = (id: string, changes: Partial<Pick<Shift, 'title' | 'site' | 'location' | 'date' | 'start' | 'end' | 'team' | 'workerIds'>>) => commit(s => ({
     ...s, shifts: s.shifts.map(shift => shift.id !== id ? shift : { ...shift, ...changes, ...(s.punches.some(p => p.shiftId === id) ? { date: shift.date, workerIds: shift.workerIds } : {}) }),
   }));
@@ -220,7 +221,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
     ...state, ready, online: true, syncError, accountEmail: session.user.email ?? null, notifications, approvals,
     setRole: () => {}, setSelectedWorker: () => {}, addTeam,
     addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, setWorkspaceName,
-    addShift, updateShift, removeShift, restoreShift, scan, issueQr, markNotificationRead, reviewTime, reset: () => {},
+    addShift, addShifts, updateShift, removeShift, restoreShift, scan, issueQr, markNotificationRead, reviewTime, reset: () => {},
     inviteWorker, signOut: async () => { await client.auth.signOut(); },
   }}>{children}</Context.Provider>;
 }

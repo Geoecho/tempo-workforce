@@ -1,7 +1,7 @@
 import { router, usePathname } from 'expo-router';
 import { Check, ChevronLeft } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { AccessibilityInfo, Animated, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, Animated, Image, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Worker } from '../lib/data';
 import { useFeedback } from '../lib/feedback';
@@ -9,7 +9,10 @@ import { useStore } from '../lib/store';
 import { AppIcon, AppIconName } from './AppIcon';
 import { C } from './theme';
 
-export function Avatar({ worker, size = 36 }: { worker: Worker; size?: number }) { return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: worker.color, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: size * .32, fontWeight: '700', color: C.green }}>{worker.initials}</Text></View>; }
+const mainTabs = new Set(['/', '/schedule', '/team', '/scan', '/time', '/settings']);
+let pendingTabTransition: { href: string; direction: 1 | -1 } | null = null;
+
+export function Avatar({ worker, size = 36 }: { worker: Worker; size?: number }) { return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: worker.color, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>{worker.photoUri ? <Image source={{ uri: worker.photoUri }} accessibilityLabel={`${worker.name} profile photo`} style={{ width: size, height: size }} /> : <Text style={{ fontSize: size * .32, fontWeight: '700', color: C.green }}>{worker.initials}</Text>}</View>; }
 export function SelectionMark({ selected, round = false }: { selected: boolean; round?: boolean }) { return <View style={{ width: 20, height: 20, borderRadius: round ? 10 : 6, borderWidth: 1.5, borderColor: C.green, backgroundColor: selected ? C.green : 'transparent', alignItems: 'center', justifyContent: 'center' }}>{selected && <Check size={14} strokeWidth={3} color="#FFFFFF" />}</View>; }
 export function Pill({ children, tone = 'green' }: { children: React.ReactNode; tone?: 'green' | 'gray' | 'orange' }) { return <View style={[styles.pill, { backgroundColor: tone === 'green' ? C.mint : tone === 'orange' ? C.orange : '#F1F2F0' }]}><Text style={{ color: tone === 'green' ? C.green : tone === 'orange' ? '#936C31' : C.muted, fontSize: 11, fontWeight: '700' }}>{children}</Text></View>; }
 export function Button({ label, onPress, icon, variant = 'primary', small = false }: { label: string; onPress: () => void; icon?: React.ReactNode; variant?: 'primary' | 'light' | 'outline' | 'danger'; small?: boolean }) {
@@ -30,11 +33,23 @@ export function Card({ children, style }: { children: React.ReactNode; style?: o
 export function Section({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) { return <View style={styles.section}><Text style={styles.sectionTitle}>{title}</Text>{action && <Pressable onPress={onAction}><Text style={styles.sectionAction}>{action}</Text></Pressable>}</View>; }
 export function Screen({ children, title, subtitle, back = false, action, noNav = false }: { children?: React.ReactNode; title?: string; subtitle?: string; back?: boolean; action?: React.ReactNode; noNav?: boolean }) {
   const { role, workers, selectedWorkerId, workspaceName, accountEmail, notifications } = useStore();
+  const path = usePathname();
   const { width } = useWindowDimensions();
   const desktop = Platform.OS === 'web' && width >= 960;
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [entrance] = useState(() => new Animated.Value(0));
-  useEffect(() => { AccessibilityInfo.isReduceMotionEnabled().then(reduced => { if (reduced) entrance.setValue(1); else Animated.timing(entrance, { toValue: 1, duration: 260, useNativeDriver: Platform.OS !== 'web' }).start(); }).catch(() => entrance.setValue(1)); }, [entrance]);
+  const [direction] = useState(() => !desktop && pendingTabTransition?.href === path ? pendingTabTransition.direction : 0);
+  const [slideX] = useState(() => new Animated.Value(direction * 28));
+  useEffect(() => {
+    if (pendingTabTransition?.href === path) pendingTabTransition = null;
+    AccessibilityInfo.isReduceMotionEnabled().then(reduced => {
+      if (reduced) { entrance.setValue(1); slideX.setValue(0); return; }
+      Animated.parallel([
+        Animated.timing(entrance, { toValue: 1, duration: 240, useNativeDriver: Platform.OS !== 'web' }),
+        Animated.timing(slideX, { toValue: 0, duration: 240, useNativeDriver: Platform.OS !== 'web' }),
+      ]).start();
+    }).catch(() => { entrance.setValue(1); slideX.setValue(0); });
+  }, [entrance, slideX, path]);
   useEffect(() => {
     const shown = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardOpen(true));
     const hidden = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardOpen(false));
@@ -44,17 +59,19 @@ export function Screen({ children, title, subtitle, back = false, action, noNav 
   const profile = workers.find(worker => worker.id === selectedWorkerId && !worker.archived);
   const initials = role === 'worker' && profile ? profile.initials : (accountEmail?.slice(0, 1) || workspaceName?.slice(0, 1) || 'T').toUpperCase();
   const unread = notifications.filter(item => !item.readAt).length;
+  const primary = mainTabs.has(path);
+  const pageLabel = path.startsWith('/shift/') ? 'Shift details' : path.startsWith('/worker/') ? 'Worker profile' : title || 'Details';
   const topbar = <View style={[styles.topbar, desktop && styles.desktopTopbar]}>
     {back && <Pressable accessibilityLabel="Go back" onPress={() => router.back()} style={styles.topIcon}><ChevronLeft size={23} color={C.ink} /></Pressable>}
-    <View style={{ flex: 1, alignItems: desktop ? 'flex-start' : back ? 'center' : 'flex-start' }}>
-      {desktop ? <Text style={styles.desktopLocation}>{title || 'Overview'}</Text> : <Text style={styles.brand}>tempo<Text style={{ color: '#69A889' }}>.</Text></Text>}
+    <View style={{ flex: 1, alignItems: 'flex-start' }}>
+      {desktop ? <Text style={styles.desktopLocation}>{title || (primary ? 'Overview' : pageLabel)}</Text> : primary ? <Text style={styles.brand}>tempo<Text style={{ color: '#69A889' }}>.</Text></Text> : <Text numberOfLines={1} style={{ color: C.ink, fontSize: 16, fontWeight: '700' }}>{pageLabel}</Text>}
     </View>
     {action}
     {role === 'worker' && <Pressable accessibilityRole="button" accessibilityLabel={`${unread} unread notifications`} onPress={() => router.push('/notifications')} style={styles.headerButton}><AppIcon name="bell" size={21} color={C.green} playing={false} />{unread > 0 && <View style={styles.unreadDot} />}</Pressable>}
-    <Pressable accessibilityRole="button" accessibilityLabel="Open profile and settings" onPress={() => router.push('/settings')} style={styles.headerProfile}><Text style={styles.headerInitials}>{initials}</Text></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel={path === '/settings' ? 'Profile and settings open' : 'Open profile and settings'} accessibilityState={{ disabled: path === '/settings' }} disabled={path === '/settings'} onPress={() => router.push('/settings')} style={[styles.headerProfile, { overflow: 'hidden' }]}>{role === 'worker' && profile?.photoUri ? <Image source={{ uri: profile.photoUri }} style={{ width: 39, height: 39 }} /> : <Text style={styles.headerInitials}>{initials}</Text>}</Pressable>
   </View>;
   const content = <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={[styles.body, desktop && styles.desktopBody]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>
-    <Animated.View style={{ opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }}>
+    <Animated.View style={{ opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [direction ? 0 : 10, 0] }) }, { translateX: slideX }] }}>
       {title && <View style={styles.pageHeading}><Text style={styles.title}>{title}</Text>{subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}</View>}
       {children}
     </Animated.View>
@@ -83,9 +100,9 @@ function BottomNav({ role, desktop = false }: { role: 'admin' | 'worker'; deskto
   ];
   return <View style={desktop ? styles.sideNav : styles.nav}>
     {desktop && <View style={styles.sideBrandBox}><Text style={styles.brand}>tempo<Text style={{ color: '#69A889' }}>.</Text></Text><Text style={styles.sideCaption}>WORKFORCE</Text></View>}
-    {tabs.map(({ href, label, icon }) => {
+    {tabs.map(({ href, label, icon }, index) => {
       const active = path === href || (href === '/schedule' && (path.startsWith('/shift/') || path.startsWith('/edit-shift/'))) || (href === '/team' && path.startsWith('/worker/'));
-      return <Pressable key={href} accessibilityRole="tab" accessibilityState={{ selected: active }} onHoverIn={() => setHovered(href)} onHoverOut={() => setHovered(null)} onFocus={() => setHovered(href)} onBlur={() => setHovered(null)} onPress={() => { setActivated(href); if (path !== href) { play('select'); router.replace(href as never); } }} style={desktop ? [styles.sideNavItem, active && styles.sideNavActive] : styles.navItem}>
+      return <Pressable key={href} accessibilityRole="tab" accessibilityState={{ selected: active }} onHoverIn={() => setHovered(href)} onHoverOut={() => setHovered(null)} onFocus={() => setHovered(href)} onBlur={() => setHovered(null)} onPress={() => { setActivated(href); if (path !== href) { const from = tabs.findIndex(tab => path === tab.href || (tab.href === '/schedule' && path.startsWith('/shift/')) || (tab.href === '/team' && path.startsWith('/worker/'))); pendingTabTransition = { href, direction: index > Math.max(from, 0) ? 1 : -1 }; play('select'); router.replace(href as never); } }} style={desktop ? [styles.sideNavItem, active && styles.sideNavActive] : styles.navItem}>
         <View style={desktop ? styles.sideIcon : [styles.navIcon, active && styles.navActive]}><AppIcon name={icon as AppIconName} size={20} color={active ? C.green : '#929B95'} playing={hovered === href || activated === href} /></View>
         <Text style={desktop ? [styles.sideLabel, active && styles.sideLabelActive] : [styles.navLabel, active && { color: C.green, fontWeight: '700' }]}>{label}</Text>
       </Pressable>;

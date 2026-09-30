@@ -9,6 +9,7 @@ type Mode = 'sign-in' | 'admin' | 'worker' | 'reset';
 
 export function AuthScreen() {
   const [mode, setMode] = useState<Mode>('sign-in');
+  const [onboardingRole, setOnboardingRole] = useState<'admin' | 'worker' | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -17,8 +18,6 @@ export function AuthScreen() {
   const [focused, setFocused] = useState<'email' | 'password' | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [introMotion] = useState(() => new Animated.Value(0));
-  const [formMotion] = useState(() => new Animated.Value(0));
-  const [choiceMotion] = useState(() => new Animated.Value(0));
   const [haloMotion] = useState(() => new Animated.Value(0));
   const [buttonScale] = useState(() => new Animated.Value(1));
   const [buttonHovered, setButtonHovered] = useState(false);
@@ -31,14 +30,10 @@ export function AuthScreen() {
       setReducedMotion(reduced);
       if (reduced) {
         introMotion.setValue(1);
-        formMotion.setValue(1);
-        choiceMotion.setValue(1);
         return;
       }
       const driver = Platform.OS !== 'web';
-      Animated.stagger(105, [introMotion, formMotion, choiceMotion].map(value =>
-        Animated.timing(value, { toValue: 1, duration: 390, useNativeDriver: driver })
-      )).start();
+      Animated.timing(introMotion, { toValue: 1, duration: 420, useNativeDriver: driver }).start();
       haloLoop = Animated.loop(Animated.sequence([
         Animated.timing(haloMotion, { toValue: 1, duration: 3100, useNativeDriver: driver }),
         Animated.timing(haloMotion, { toValue: 0, duration: 3100, useNativeDriver: driver }),
@@ -46,11 +41,9 @@ export function AuthScreen() {
       haloLoop.start();
     }).catch(() => {
       introMotion.setValue(1);
-      formMotion.setValue(1);
-      choiceMotion.setValue(1);
     });
     return () => { active = false; haloLoop?.stop(); };
-  }, [introMotion, formMotion, choiceMotion, haloMotion]);
+  }, [introMotion, haloMotion]);
 
   const pressScale = (value: number) => {
     if (reducedMotion) return;
@@ -91,13 +84,16 @@ export function AuthScreen() {
   };
 
   const changeMode = (next: Mode) => {
+    setOnboardingRole(null);
     setMode(next);
     setMessage('');
     setPassword('');
   };
 
-  const title = mode === 'sign-in' ? 'Welcome back.' : mode === 'admin' ? 'Lead your team.' : mode === 'worker' ? 'Join your team.' : 'Reset your password.';
-  const description = mode === 'sign-in'
+  const title = onboardingRole === 'admin' ? 'A calmer way to run your crew.' : onboardingRole === 'worker' ? 'Know where to be. Clock in with confidence.' : mode === 'sign-in' ? 'Welcome back.' : mode === 'admin' ? 'Lead your team.' : mode === 'worker' ? 'Join your team.' : 'Reset your password.';
+  const description = onboardingRole
+    ? 'Three simple steps to get started with Tempo.'
+    : mode === 'sign-in'
     ? 'Your shifts, people, and hours in one place.'
     : mode === 'admin'
       ? 'Create a workspace for your crew and start planning.'
@@ -105,19 +101,26 @@ export function AuthScreen() {
 
   return <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <Animated.View pointerEvents="none" style={[s.decoration, { transform: [{ translateY: haloMotion.interpolate({ inputRange: [0, 1], outputRange: [0, 16] }) }, { scale: haloMotion.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] }) }] }]} />
-    <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-      <View style={s.shell}>
-        <Animated.View style={[s.brandRow, { opacity: introMotion, transform: [{ translateY: introMotion.interpolate({ inputRange: [0, 1], outputRange: [13, 0] }) }] }]}>
+    <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <Animated.View style={[s.shell, { opacity: introMotion, transform: [{ translateY: introMotion.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }]}>
+        <View style={s.brandRow}>
           <Text style={s.brand}>tempo<Text style={{ color: '#69A889' }}>.</Text></Text>
-        </Animated.View>
+        </View>
 
-        <Animated.View style={[s.intro, { opacity: introMotion, transform: [{ translateY: introMotion.interpolate({ inputRange: [0, 1], outputRange: [13, 0] }) }] }]}>
+        <View style={s.intro}>
           <Text style={s.eyebrow}>YOUR WORKFORCE SPACE</Text>
           <Text style={s.title}>{title}</Text>
           <Text style={s.description}>{description}</Text>
-        </Animated.View>
+          {!onboardingRole && (mode === 'admin' || mode === 'worker') && <View style={s.steps}><View style={s.activeStep}><Text style={s.activeStepText}>1  ACCOUNT</Text></View><Text style={s.stepDivider}>›</Text><Text style={s.stepText}>{mode === 'admin' ? '2  WORKSPACE' : '2  INVITATION'}</Text><Text style={s.stepDivider}>›</Text><Text style={s.stepText}>3  READY</Text></View>}
+        </View>
 
-        <Animated.View style={[s.formCard, { opacity: formMotion, transform: [{ translateY: formMotion.interpolate({ inputRange: [0, 1], outputRange: [19, 0] }) }] }]}>
+        {onboardingRole ? <View style={s.formCard}>
+          {(onboardingRole === 'admin'
+            ? [['01', 'Create your workspace', 'Name your organization and add your teams.'], ['02', 'Plan work across sites', 'Create one-day or repeating shifts, then assign people.'], ['03', 'Review the day', 'Show a live site code and review clock records and monthly pay.']]
+            : [['01', 'Join your invitation', 'Sign up with the exact email your admin invited.'], ['02', 'See your next shift', 'Find the site, meeting point, and time in one place.'], ['03', 'Scan at the site', 'Use your iPhone or Android phone to check in and out.']]
+          ).map(([number, heading, detail]) => <View key={number} style={s.onboardingRow}><Text style={s.onboardingNumber}>{number}</Text><View style={{ flex: 1 }}><Text style={s.onboardingTitle}>{heading}</Text><Text style={s.onboardingDetail}>{detail}</Text></View></View>)}
+          <Pressable accessibilityRole="button" onPress={() => changeMode(onboardingRole)} style={[s.submit, { marginTop: 10 }]}><Text style={s.submitText}>Continue</Text><ArrowRight size={19} color="#fff" /></Pressable>
+        </View> : <View style={s.formCard}>
           <Text style={s.formTitle}>{mode === 'sign-in' ? 'Sign in to Tempo' : mode === 'reset' ? 'Recover your account' : 'Create your account'}</Text>
           <Text style={s.label}>Email address</Text>
           <TextInput
@@ -158,24 +161,24 @@ export function AuthScreen() {
           <Animated.View style={{ transform: [{ scale: buttonScale }] }}><Pressable accessibilityRole="button" onPress={() => void submit()} onHoverIn={() => setButtonHovered(true)} onHoverOut={() => setButtonHovered(false)} onPressIn={() => { pressScale(.97); setButtonHovered(true); }} onPressOut={() => { pressScale(1); if (Platform.OS !== 'web') setButtonHovered(false); }} disabled={busy} style={[s.submit, busy && { opacity: .65 }]}>
             {busy ? <ActivityIndicator color="#fff" /> : <><Text style={s.submitText}>{mode === 'sign-in' ? 'Sign in' : mode === 'reset' ? 'Send reset link' : 'Create account'}</Text><AppIcon name="arrow-right" size={19} color="#fff" playing={buttonHovered} /></>}
           </Pressable></Animated.View>
-        </Animated.View>
+        </View>}
 
-        {mode === 'sign-in' ? <Animated.View style={[s.joinCard, { opacity: choiceMotion, transform: [{ translateY: choiceMotion.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }]}>
+        {onboardingRole ? <Pressable accessibilityRole="button" onPress={() => setOnboardingRole(null)} style={s.backLink}><Text style={{ color: C.green, fontWeight: '800' }}>Back to sign in</Text></Pressable> : mode === 'sign-in' ? <View style={s.joinCard}>
           <Text style={s.joinHeading}>New to Tempo?</Text>
-          <Pressable accessibilityRole="button" onPress={() => changeMode('admin')} style={({ pressed }) => [s.joinRow, pressed && s.pressedRow]}>
+          <Pressable accessibilityRole="button" onPress={() => setOnboardingRole('admin')} style={({ pressed }) => [s.joinRow, pressed && s.pressedRow]}>
             <View style={s.joinIcon}><Building2 size={19} color={C.green} /></View>
             <View style={{ flex: 1 }}><Text style={s.joinTitle}>Set up a workspace</Text><Text style={s.joinDetail}>For admins planning shifts</Text></View>
             <ArrowRight size={17} color={C.muted} />
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={() => changeMode('worker')} style={({ pressed }) => [s.joinRow, { borderBottomWidth: 0 }, pressed && s.pressedRow]}>
+          <Pressable accessibilityRole="button" onPress={() => setOnboardingRole('worker')} style={({ pressed }) => [s.joinRow, { borderBottomWidth: 0 }, pressed && s.pressedRow]}>
             <View style={s.joinIcon}><UsersRound size={19} color={C.green} /></View>
             <View style={{ flex: 1 }}><Text style={s.joinTitle}>Join an existing team</Text><Text style={s.joinDetail}>For invited workers</Text></View>
             <ArrowRight size={17} color={C.muted} />
           </Pressable>
-        </Animated.View> : <Animated.View style={{ opacity: choiceMotion }}><Pressable accessibilityRole="button" onPress={() => changeMode('sign-in')} style={s.backLink}>
+        </View> : <View><Pressable accessibilityRole="button" onPress={() => changeMode('sign-in')} style={s.backLink}>
           <Text style={{ color: C.muted }}>{mode === 'reset' ? 'Remember your password? ' : 'Already have an account? '}<Text style={{ color: C.green, fontWeight: '800' }}>Sign in</Text></Text>
-        </Pressable></Animated.View>}
-      </View>
+        </Pressable></View>}
+      </Animated.View>
     </ScrollView>
   </KeyboardAvoidingView>;
 }
@@ -191,8 +194,17 @@ const s = StyleSheet.create({
   eyebrow: { color: C.green, fontSize: 10, letterSpacing: 2, fontWeight: '800', marginBottom: 9 },
   title: { color: C.ink, fontSize: 32, fontWeight: '800', letterSpacing: -1.2 },
   description: { color: C.muted, fontSize: 14, lineHeight: 21, marginTop: 8 },
+  steps: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 15 },
+  activeStep: { backgroundColor: C.mint, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6 },
+  activeStepText: { color: C.green, fontWeight: '800', fontSize: 9, letterSpacing: .4 },
+  stepDivider: { color: C.muted, fontSize: 14 },
+  stepText: { color: C.muted, fontWeight: '700', fontSize: 9, letterSpacing: .4 },
   formCard: { backgroundColor: C.surface, borderRadius: 22, borderWidth: 1, borderColor: C.line, padding: 20 },
   formTitle: { color: C.ink, fontSize: 16, fontWeight: '800', marginBottom: 21 },
+  onboardingRow: { flexDirection: 'row', gap: 14, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: C.line },
+  onboardingNumber: { color: C.green, fontSize: 12, fontWeight: '800', marginTop: 2 },
+  onboardingTitle: { color: C.ink, fontSize: 14, fontWeight: '800' },
+  onboardingDetail: { color: C.muted, fontSize: 12, lineHeight: 18, marginTop: 4 },
   label: { color: C.ink, fontSize: 12, fontWeight: '700', marginBottom: 8 },
   input: { height: 49, borderRadius: 11, borderWidth: 1, borderColor: C.line, backgroundColor: '#FBFCFA', paddingHorizontal: 13, fontSize: 15, color: C.ink, marginBottom: 17 },
   focusedInput: { borderColor: C.green, backgroundColor: '#FFFFFF' },

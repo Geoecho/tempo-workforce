@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import { useFeedback } from './feedback';
 import { useStore } from './store';
+import { WATCH_SCAN_NOTIFICATION } from './WatchSync';
 
 type ReminderShift = { id: string; date: string; start: string; title: string; site: string };
 const KIND = 'tempo-shift-reminder';
@@ -71,6 +72,11 @@ export function ShiftReminders() {
   useEffect(() => {
     const open = (response: Notifications.NotificationResponse) => {
       const data = response.notification.request.content.data;
+      if (data?.kind === WATCH_SCAN_NOTIFICATION) {
+        router.push('/scan');
+        Notifications.clearLastNotificationResponse();
+        return;
+      }
       if (data?.kind !== KIND && data?.kind !== 'tempo-shift-change') return;
       const shiftId = data.shiftId;
       const canOpen = typeof shiftId === 'string' && shifts.some(shift => shift.id === shiftId && !shift.archived && shift.workerIds.includes(selectedWorkerId));

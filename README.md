@@ -1,49 +1,67 @@
-# Tempo
+# Tempo Workforce
 
-A React Native workforce operations prototype for event crews, factories, warehouses, and field teams. Built with Expo SDK 57 and TypeScript.
+Tempo schedules crews at sites, records QR based check-ins, and gives admins a monthly view of estimated pay. It runs as an Expo app on iOS and Android and as a responsive web app at [tempo-workforce.vercel.app](https://tempo-workforce.vercel.app/).
 
-## Run
+## How work moves through Tempo
+
+1. An admin creates a workspace, then creates teams and worker profiles.
+2. In **More → Invite worker**, the admin links a worker profile to an email and shares the join instructions. The worker creates their own account, confirms their email, and signs in. Admin and worker permissions are separate. Each role has a short introduction before sign-up, followed by the account → workspace/invitation → ready steps. Password recovery is available from Sign in.
+3. In **Shifts → New shift**, the admin chooses a site, meeting point, time, and workers. A shift can be **One day**, **Every day**, or **Weekdays** through a chosen end date (up to 31 calendar days). Repeating creates a separate shift for each date; an admin can change an individual day later. Create another series for a different site or schedule.
+4. At the site, an admin opens that day's shift and taps **Display site QR code**. The live code refreshes about every 30 seconds. Workers use **Scan** on their own signed-in phones. A scan alternates check-in and check-out; a 45-second cooldown prevents accidental immediate repeats. The shift page shows who is on site and the clock history.
+5. **Shifts → History** shows finished shifts. Open one to see its team and check-in/check-out records; export the history as CSV. Removed shifts with clock records remain archived for audit.
+6. **Time & pay** starts on the current month. Use the arrows to review earlier months. The monthly estimated total comes from dated daily records; admins review or undo approval on each day and export a CSV named for that month. Payable time is capped at 10 hours per worker per day. Raw extra time remains visible for review. Tempo calculates estimates; it does not pay workers or replace a payroll system.
+
+Admins can add or change a worker's profile photo when creating or editing that worker. Tempo crops and compresses it before saving it with the shared worker profile; team members see the photo in their workspace.
+
+The **Add to calendar** action opens the native calendar event editor on iOS and Android. On web, browser support varies and an `.ics` calendar file is offered.
+
+## Site QR display
+
+Start with a powered iPad or Android tablet on a stable stand, connected to Wi-Fi or cellular data. Keep the live site QR screen open and use the device's kiosk or single-app setting. For a larger fixed entrance display, a small computer such as a Raspberry Pi can run the web app in kiosk mode on a monitor. The screen must stay online because the code expires; a printed QR code will not work. Today the QR screen requires an admin account, so unattended dedicated displays should get a restricted display-only account before a broad rollout.
+
+## Apple Watch companion
+
+The **More → Watch preview** screen is an interactive design preview on phone or web. The native SwiftUI companion source is in `targets/watch/`. It shows the worker's next shift or check-in state using the paired iPhone's latest data. Its button requests the iPhone scanner; the worker still scans the site QR with the phone. The Watch does not record time itself.
+
+The watch target uses `@bacons/apple-targets` and the iPhone bridge uses `@plevo/expo-watch-connectivity`. These are native modules, so **Expo Go and the web deployment cannot install or test the Watch app**. A new iPhone + Watch native build is required. The native companion has not yet been compiled or tested on physical devices from this Windows workspace.
+
+### Test on a paired iPhone and Apple Watch using a Mac
+
+1. Install current Xcode on the Mac, sign in with your Apple ID in **Xcode → Settings → Accounts**, and pair the iPhone and Watch in Apple's Watch app. Xcode must support the iPhone's iOS and the Watch's watchOS (the test device here is an Apple Watch SE 3 on watchOS 26.6).
+2. Clone this repo on the Mac and run `npm install`.
+3. Create `.env.local` with `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from the Supabase project. Do not put a service-role key in the app.
+4. Run `npx expo prebuild -p ios --clean` on the Mac. The plugin generates `ios/` from `app.json` and `targets/watch/`; do not edit generated native files as the source of truth. The plugin may warn about a missing `ios.appleTeamId` until signing is configured in Xcode. You can find your Personal Team ID there and add it to `app.json` before regenerating.
+5. Open the generated `.xcworkspace` in Xcode. Select your **Personal Team** for both the Tempo iPhone app and its Watch target under **Signing & Capabilities**. If Xcode reports the bundle identifier is taken, change `ios.bundleIdentifier` in `app.json` to one unique to your Apple ID, then regenerate. A free Personal Team may have signing restrictions or short-lived provisioning; if Xcode cannot sign both targets, Apple Developer Program membership is required.
+6. Choose the paired iPhone/Watch run destination and build from Xcode. Install and launch Tempo on iPhone, sign in as an invited worker, then open Tempo on the Watch. Verify that the next shift appears and **Scan on iPhone** opens the scanner or gives a notification to tap. Check in by scanning the live site QR displayed on a second device.
+
+The current native source and connectivity API are prepared for that test, but the install and two-device communication remain unverified until this Xcode run succeeds.
+
+## Run locally
 
 ```bash
 npm install
 npx expo start
 ```
 
-Open the QR shown by Expo in Expo Go on a phone, or press `w` for the web preview. The camera scanner needs a camera-equipped device and permission. The web preview is useful for the rest of the app.
+Press `w` for the web build, or scan Expo's development QR with Expo Go on a phone. Native-only features, including Watch connectivity, require a development/native build. If `.env.local` is absent, Tempo uses local demo data on that device; that demo is not shared across devices and demo QR codes do not provide production security.
 
-## Phone web preview
+For a real shared workspace, configure the two public Supabase variables above and apply the SQL in `supabase/` in date order to the project. The publishable key can be shipped to clients; never add a service-role key to client code. Supabase sign-in and database policies enforce account roles, invitations, QR issuance, punches, and approvals.
 
-The web build can be deployed to Vercel. Open the resulting HTTPS URL in your phone browser; you can also add it to your home screen. `vercel.json` builds the Expo web bundle and rewrites app routes so links such as `/schedule` work when opened directly.
+To check the app before shipping:
 
 ```bash
+npx expo lint
+npx tsc --noEmit
 npm run build:web
-npx vercel --prod
 ```
 
-## Explore the demo
+Vercel deploys the connected Git repository to the production web URL. For local deployment management, install the [Vercel CLI](https://vercel.com/docs/cli) with `npm i -g vercel`.
 
-1. Start in **Admin** view. Create a worker with a phone number and hourly rate, create a shift, and open **Site QR** for today's shift.
-2. Open **Workspace → Worker** and choose a worker assigned to today's shift.
-3. Open **Scan**. Scan the site code from a second display, or tap the same-device demo action.
-4. The first scan checks in. A later scan checks out and shows estimated pay. Review payable hours and earnings under **Hours** or **Time & attendance**.
-5. Use **Team** to call a worker, edit their profile and rate, or remove them. Open a shift to edit its event details and crew or remove it. Admins can export a payroll CSV.
+## Current limits
 
-The demo caps **payable time at 10 hours per worker per day across all shifts**. It rejects another check-in once the cap is reached. Changing a worker's rate does not change the rate captured at earlier check-ins. The app offers 21 pay currencies; the currency can be changed before the first punch. Removing a worker or shift with clock history archives it from active views while retaining the pay log. Archived records can be restored in **Workspace**. Active check-ins must be closed before removal. The interface uses short press and screen transitions, with reduced-motion support. See [brand/README.md](brand/README.md) for the logo, Instagram feed and story creatives, colors, and launch copy.
+- Repeating shifts are generated one month at a time. Editing or removing one day does not change the other days in that series.
+- Pay is estimated from recorded punches and the hourly rate captured at check-in. Payroll export is for review and transfer to a payroll system; it does not handle taxes, overtime rules, leave, or disbursement.
+- The Watch uses paired iPhone connectivity and has no independent QR scanner. Physical Watch installation and phone-to-watch messaging still need the Mac/Xcode test above.
+- A permanently unattended QR display should use a restricted site-display role; current QR display access is admin-only.
 
-Demo data, including changes, is saved on the device with AsyncStorage. **This is a local prototype:** switching roles is a preview control, not authentication; separate devices do not share data; the QR payload is client generated and can be forged. The 10 hour limit is a product preview, not a reliable fraud control. Do not use these records for real payroll or access control. Seeded phone numbers are fictional and should be replaced before trying the call button.
-
-## Product scope
-
-The prototype includes an admin dashboard, worker dashboard, team directory with phone calling and editable pay rates, shift creation and assignment, shift details, a rotating site QR, camera scanning, check-in and check-out events, capped payable hours, estimated pay, a payroll CSV, and demo role switching.
-
-For a production release, the next implementation should include:
-
-- Organization and site accounts with invited users, verified sign-in, and server enforced admin, manager, and worker permissions.
-- A shared database for teams, workers, sites, shifts, assignments, immutable punch events, and approval history.
-- Short-lived, **server signed** QR challenges. The server should validate assignment, site, shift window, expiration, replay, and the authenticated worker, then write a server timestamp. A client clock must never be the source of truth.
-- Breaks, overnight shifts, time zones, overtime rules, missed punch requests, manager corrections with reasons, and approved timesheets. Keep raw events even when a correction is approved.
-- Reliable offline behavior: queue pending scans, show that they are unverified, and reconcile them on reconnect with explicit conflict handling.
-- Notifications for assignments and changes; availability and leave; qualifications and safety requirements; payroll export or integration; and audit/reporting views.
-- Privacy controls for retention and access to personal information. Location should be optional and collected only when the organization has a clear need and worker notice.
-
-The QR flow deliberately separates a **site code** displayed by the lead from a **worker identity** established by sign-in. That is the key design choice for trustworthy attendance across event and industrial sites.
+See [brand/README.md](brand/README.md) for Tempo's visual identity.

@@ -2,13 +2,15 @@ import { router } from 'expo-router';
 import { ArrowUpRight, MapPin, UsersRound } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { AccessibilityInfo, Animated, Platform, Pressable, Text, View } from 'react-native';
-import { formatDay, Shift } from '../lib/data';
+import { durationMinutes, formatDay, hoursLabel, Shift } from '../lib/data';
 import { useStore } from '../lib/store';
 import { Card } from './components';
 import { C } from './theme';
 
-export function ShiftCard({ shift, compact = false }: { shift: Shift; compact?: boolean }) {
-  const { workers } = useStore();
+export function ShiftCard({ shift, compact = false, history = false }: { shift: Shift; compact?: boolean; history?: boolean }) {
+  const { workers, punches } = useStore();
+  const checkedIn = [...new Set(punches.filter(p => p.shiftId === shift.id && p.type === 'in').map(p => p.workerId))].length;
+  const recordedMinutes = [...new Set(punches.filter(p => p.shiftId === shift.id).map(p => p.workerId))].reduce((total, workerId) => total + durationMinutes(punches, shift.id, workerId), 0);
   const [scale] = useState(() => new Animated.Value(1));
   const [reducedMotion, setReducedMotion] = useState(false);
   useEffect(() => { AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion).catch(() => {}); }, []);
@@ -32,6 +34,7 @@ export function ShiftCard({ shift, compact = false }: { shift: Shift; compact?: 
             <Text style={{ color: C.muted, fontSize: 12, fontWeight: '600' }}>{formatDay(shift.date).toUpperCase()}  ·  {shift.start}–{shift.end}</Text>
             <Text style={{ color: C.ink, fontSize: compact ? 16 : 17, fontWeight: '700', marginTop: 7, letterSpacing: -.2 }}>{shift.title}</Text>
             <Text style={{ color: C.muted, fontSize: 13, marginTop: 3 }}>{shift.site}</Text>
+            {history && <Text style={{ color: C.green, fontSize: 11, fontWeight: '700', marginTop: 7 }}>{shift.archived ? 'REMOVED · ' : ''}{checkedIn} checked in · {hoursLabel(recordedMinutes)} recorded</Text>}
           </View>
           <ArrowUpRight size={18} color={C.muted} />
         </View>

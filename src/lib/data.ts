@@ -1,7 +1,7 @@
 export type Role = 'admin' | 'worker';
 export const CURRENCIES = ['PLN', 'EUR', 'USD', 'GBP', 'CAD', 'AUD', 'CHF', 'SEK', 'NOK', 'DKK', 'CZK', 'HUF', 'RON', 'UAH', 'AED', 'INR', 'SGD', 'JPY', 'BRL', 'MXN', 'ZAR'] as const;
 export type Currency = typeof CURRENCIES[number];
-export type Worker = { id: string; name: string; initials: string; role: string; team: string; color: string; phone?: string; hourlyRate: number; archived?: boolean };
+export type Worker = { id: string; name: string; initials: string; role: string; team: string; color: string; phone?: string; photoUri?: string; hourlyRate: number; archived?: boolean };
 export type Shift = { id: string; title: string; site: string; location: string; date: string; start: string; end: string; team: string; workerIds: string[]; status: 'upcoming' | 'active' | 'completed'; archived?: boolean };
 export type Punch = { id: string; shiftId: string; workerId: string; type: 'in' | 'out'; at: string; source: 'qr' | 'demo'; rateAtCheckIn?: number; workDate?: string };
 export type ShiftNotification = { id: string; workerId: string; shiftId: string; kind: 'assigned' | 'changed' | 'removed'; title: string; body: string; createdAt: string; readAt: string | null };
@@ -35,6 +35,28 @@ export const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)
 export const today = () => localDate(new Date());
 export const formatDay = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 export const formatTime = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+export const shiftHasEnded = (shift: Shift, now = Date.now()) => {
+  const end = new Date(`${shift.date}T${shift.end}:00`);
+  if (shift.end <= shift.start) end.setDate(end.getDate() + 1);
+  return end.getTime() < now;
+};
+export const shiftHasOpenPunch = (shiftId: string, punches: Punch[]) => {
+  const latest = new Map<string, Punch>();
+  for (const punch of punches.filter(item => item.shiftId === shiftId).sort((a, b) => a.at.localeCompare(b.at))) latest.set(punch.workerId, punch);
+  return [...latest.values()].some(punch => punch.type === 'in');
+};
+export type ShiftRepeat = 'once' | 'daily' | 'weekdays';
+export const repeatShiftDates = (start: string, until: string, repeat: ShiftRepeat): string[] => {
+  if (repeat === 'once') return [start];
+  const cursor = new Date(`${start}T12:00:00`);
+  const end = new Date(`${until}T12:00:00`);
+  if (Number.isNaN(cursor.getTime()) || Number.isNaN(end.getTime()) || end < cursor) return [];
+  const dates: string[] = [];
+  for (let day = 0; cursor <= end && day < 31; day++, cursor.setDate(cursor.getDate() + 1)) {
+    if (repeat === 'daily' || (cursor.getDay() !== 0 && cursor.getDay() !== 6)) dates.push(localDate(cursor));
+  }
+  return dates;
+};
 export const durationMinutes = (punches: Punch[], shiftId?: string, workerId?: string) => {
   const sorted = punches.filter(p => (!shiftId || p.shiftId === shiftId) && (!workerId || p.workerId === workerId)).sort((a, b) => a.at.localeCompare(b.at));
   const active = new Map<string, number>(); let total = 0;

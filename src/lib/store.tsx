@@ -25,7 +25,7 @@ function LocalStoreProvider({ children }: { children: React.ReactNode }) {
     const id = uid();
     return { ...s, workers: [...s.workers, { ...worker, id, initials: worker.name.split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase(), color: '#DDEBE5' }], selectedWorkerId: s.selectedWorkerId || id };
   });
-  const updateWorker = (id: string, changes: Partial<Pick<Worker, 'name' | 'role' | 'team' | 'phone' | 'hourlyRate'>>) => setState(s => ({ ...s, workers: s.workers.map(w => w.id === id ? { ...w, ...changes, initials: changes.name ? changes.name.split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase() : w.initials } : w) }));
+  const updateWorker = (id: string, changes: Partial<Pick<Worker, 'name' | 'role' | 'team' | 'phone' | 'photoUri' | 'hourlyRate'>>) => setState(s => ({ ...s, workers: s.workers.map(w => w.id === id ? { ...w, ...changes, initials: changes.name ? changes.name.split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase() : w.initials } : w) }));
   const removeWorker = (id: string) => setState(s => {
     if (s.shifts.some(shift => [...s.punches].reverse().find(p => p.workerId === id && p.shiftId === shift.id)?.type === 'in')) return s;
     const hasHistory = s.punches.some(p => p.workerId === id);
@@ -36,6 +36,7 @@ function LocalStoreProvider({ children }: { children: React.ReactNode }) {
   const setCurrency = (currency: Currency) => setState(s => s.punches.length ? s : ({ ...s, currency }));
   const setWorkspaceName = (rawName: string) => setState(s => rawName.trim() ? { ...s, workspaceName: rawName.trim() } : s);
   const addShift = (shift: Omit<Shift, 'id' | 'status'>) => setState(s => ({ ...s, shifts: [{ ...shift, id: uid(), status: 'upcoming' }, ...s.shifts] }));
+  const addShifts = (shifts: Omit<Shift, 'id' | 'status'>[]) => setState(s => ({ ...s, shifts: [...shifts.map(shift => ({ ...shift, id: uid(), status: 'upcoming' as const })), ...s.shifts] }));
   const updateShift = (id: string, changes: Partial<Pick<Shift, 'title' | 'site' | 'location' | 'date' | 'start' | 'end' | 'team' | 'workerIds'>>) => setState(s => ({ ...s, shifts: s.shifts.map(shift => {
     if (shift.id !== id) return shift;
     const locked = s.punches.some(p => p.shiftId === id);
@@ -78,7 +79,7 @@ function LocalStoreProvider({ children }: { children: React.ReactNode }) {
     setApprovals(current => approve ? [...current.filter(a => !(a.workerId === workerId && a.date === date)), { workerId, date, approvedBy: 'Demo manager', approvedAt: new Date().toISOString() }] : current.filter(a => !(a.workerId === workerId && a.date === date)));
     return { ok: true, message: approve ? 'Time approved.' : 'Approval removed.' };
   };
-  return <Context.Provider value={{ ...state, ready, online: false, syncError: null, accountEmail: null, notifications, approvals, setRole, setSelectedWorker, addTeam, addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, setWorkspaceName, addShift, updateShift, removeShift, restoreShift, scan, issueQr: async shiftId => qrPayload(shiftId), markNotificationRead: async id => setNotifications(current => current.map(item => item.id === id ? { ...item, readAt: new Date().toISOString() } : item)), reviewTime, reset, inviteWorker: async () => ({ ok: false, message: 'Online database is not configured.' }), signOut: async () => {} }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ ...state, ready, online: false, syncError: null, accountEmail: null, notifications, approvals, setRole, setSelectedWorker, addTeam, addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, setWorkspaceName, addShift, addShifts, updateShift, removeShift, restoreShift, scan, issueQr: async shiftId => qrPayload(shiftId), markNotificationRead: async id => setNotifications(current => current.map(item => item.id === id ? { ...item, readAt: new Date().toISOString() } : item)), reviewTime, reset, inviteWorker: async () => ({ ok: false, message: 'Online database is not configured.' }), signOut: async () => {} }}>{children}</Context.Provider>;
 }
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   return supabase ? <OnlineStoreProvider>{children}</OnlineStoreProvider> : <LocalStoreProvider>{children}</LocalStoreProvider>;
