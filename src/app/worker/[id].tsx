@@ -1,7 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { Phone, Trash2 } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Pressable } from '../../ui/LocalizedPressable';
+import { Text } from '../../ui/LocalizedText';
 import { formatDay, formatMoney, formatTime, hoursLabel, localDate, paySummary, today, Worker } from '../../lib/data';
 import { confirmRemoval } from '../../lib/confirm';
 import { callWorker } from '../../lib/phone';

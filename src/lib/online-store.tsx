@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
+import { Text } from '../ui/LocalizedText';
 import { AuthScreen } from '../ui/AuthScreen';
 import { PasswordRecovery } from '../ui/PasswordRecovery';
 import { WorkspaceSetup } from '../ui/WorkspaceSetup';

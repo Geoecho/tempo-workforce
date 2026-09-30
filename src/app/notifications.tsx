@@ -1,7 +1,9 @@
 import { router } from 'expo-router';
 import { Bell, CalendarDays } from 'lucide-react-native';
 import React from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Pressable } from '../ui/LocalizedPressable';
+import { Text } from '../ui/LocalizedText';
 import { useStore } from '../lib/store';
 import { Card, Empty, Screen } from '../ui/components';
 import { C } from '../ui/theme';

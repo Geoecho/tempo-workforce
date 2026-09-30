@@ -1,7 +1,9 @@
 import { useLocalSearchParams } from 'expo-router';
 import { Clock3, QrCode, ShieldCheck } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Pressable } from '../ui/LocalizedPressable';
+import { Text } from '../ui/LocalizedText';
 import QRCode from 'react-native-qrcode-svg';
 import { today } from '../lib/data';
 import { useStore } from '../lib/store';

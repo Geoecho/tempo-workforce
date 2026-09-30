@@ -1,6 +1,8 @@
 import { ArrowRight, LockKeyhole } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable } from './LocalizedPressable';
+import { Text, TextInput } from './LocalizedText';
 import { supabase } from '../lib/supabase';
 import { C } from './theme';
 

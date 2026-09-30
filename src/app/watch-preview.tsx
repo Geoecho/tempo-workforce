@@ -1,7 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { BellRing, Check, ChevronRight, Clock3, MapPin, ScanLine, Watch } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Pressable } from '../ui/LocalizedPressable';
+import { Text } from '../ui/LocalizedText';
 import { formatDay, today } from '../lib/data';
 import { useFeedback } from '../lib/feedback';
 import { useStore } from '../lib/store';

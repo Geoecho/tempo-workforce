@@ -1,4 +1,5 @@
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { AppState, Platform } from 'react-native';
@@ -27,7 +28,7 @@ export function WatchSync() {
   });
 
   useEffect(() => {
-    if (!ready || Platform.OS !== 'ios') return;
+    if (!ready || Platform.OS !== 'ios' || Constants.expoGoConfig) return;
     let cancelled = false;
     let removeListener: (() => void) | undefined;
     void import('@plevo/expo-watch-connectivity').then(async ({ WatchConnectivity }) => {

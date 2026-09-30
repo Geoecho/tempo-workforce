@@ -1,15 +1,19 @@
 import { router } from 'expo-router';
 import { Download, Plus } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Platform, Pressable, Share, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, Share, useWindowDimensions, View } from 'react-native';
+import { Pressable } from '../ui/LocalizedPressable';
+import { Text } from '../ui/LocalizedText';
 import { csvRow, downloadCsv } from '../lib/csv';
 import { durationMinutes, shiftHasEnded, shiftHasOpenPunch, today } from '../lib/data';
 import { useStore } from '../lib/store';
+import { useLanguage } from '../lib/i18n';
 import { Button, Empty, Screen } from '../ui/components';
 import { ShiftCard } from '../ui/ShiftCard';
 import { C } from '../ui/theme';
 
 export default function Schedule() {
+  const { t } = useLanguage();
   const { role, shifts, workers, punches, selectedWorkerId } = useStore();
   const { width } = useWindowDimensions();
   const desktop = Platform.OS === 'web' && width >= 960;
@@ -46,10 +50,10 @@ export default function Schedule() {
         accessibilityRole="tab"
         accessibilityState={{ selected: filter === item }}
         style={{ backgroundColor: filter === item ? C.green : C.surface, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: filter === item ? C.green : C.line }}
-      ><Text style={{ color: filter === item ? '#fff' : C.muted, fontWeight: '700', fontSize: 13 }}>{item === 'upcoming' ? 'Upcoming' : 'History'}</Text></Pressable>)}
+      ><Text style={{ color: filter === item ? '#fff' : C.muted, fontWeight: '700', fontSize: 13 }}>{t(item === 'upcoming' ? 'Upcoming' : 'History')}</Text></Pressable>)}
     </View>
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 13 }}>
-      <Text style={{ color: C.ink, fontSize: 16, fontWeight: '700' }}>{filtered.length} shifts</Text>
+      <Text style={{ color: C.ink, fontSize: 16, fontWeight: '700' }}>{filtered.length} {t('Shifts').toLowerCase()}</Text>
       {filter === 'history' ? !!filtered.length && <Button label="Export CSV" small variant="outline" icon={<Download size={16} color={C.green} />} onPress={() => void exportHistory()} /> : role === 'admin' && <Button label="New shift" small icon={<Plus size={16} color="#fff" />} onPress={() => router.push('/new-shift')} />}
     </View>
     {filtered.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>

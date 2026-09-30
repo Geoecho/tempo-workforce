@@ -1,7 +1,9 @@
 import * as Location from 'expo-location';
 import { MapPin, Navigation2 } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { View } from 'react-native';
+import { Pressable } from './LocalizedPressable';
+import { Text, TextInput } from './LocalizedText';
 import { openSiteMap, parseSitePin, SitePin } from '../lib/site-location';
 import { C } from './theme';
 

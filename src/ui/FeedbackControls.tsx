@@ -1,7 +1,9 @@
 import { router } from 'expo-router';
 import { BellRing, Smartphone, Volume2, Watch } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Linking, Platform, Pressable, Switch, Text, View } from 'react-native';
+import { Linking, Platform, Switch, View } from 'react-native';
+import { Pressable } from './LocalizedPressable';
+import { Text } from './LocalizedText';
 import { useFeedback } from '../lib/feedback';
 import { Button, Card, Section } from './components';
 import { C } from './theme';

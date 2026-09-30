@@ -1,7 +1,9 @@
 import { router } from 'expo-router';
 import { ArrowUpRight, MapPin, UsersRound } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { AccessibilityInfo, Animated, Platform, Pressable, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, Platform, View } from 'react-native';
+import { Pressable } from './LocalizedPressable';
+import { Text } from './LocalizedText';
 import { durationMinutes, formatDay, hoursLabel, Shift } from '../lib/data';
 import { useStore } from '../lib/store';
 import { Card } from './components';

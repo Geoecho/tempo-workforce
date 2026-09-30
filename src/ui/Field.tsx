@@ -1,4 +1,5 @@
 import React from 'react';
-import { KeyboardTypeOptions, Text, TextInput, View } from 'react-native';
+import { KeyboardTypeOptions, View } from 'react-native';
+import { Text, TextInput } from './LocalizedText';
 import { C } from './theme';
 export function Field({ label, value, onChangeText, placeholder, keyboardType, editable = true }: { label: string; value: string; onChangeText: (text: string) => void; placeholder: string; keyboardType?: KeyboardTypeOptions; editable?: boolean }) { return <View style={{ marginBottom: 17 }}><Text style={{ color: C.ink, fontWeight: '700', fontSize: 13, marginBottom: 8 }}>{label}</Text><TextInput value={value} onChangeText={onChangeText} editable={editable} placeholder={placeholder} placeholderTextColor="#A4ADA7" keyboardType={keyboardType} style={{ backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 13, minHeight: 50, paddingHorizontal: 15, fontSize: 14, color: C.ink, opacity: editable ? 1 : .55 }} /></View>; }

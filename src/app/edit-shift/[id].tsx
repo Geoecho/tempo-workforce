@@ -1,6 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Pressable } from '../../ui/LocalizedPressable';
+import { Text } from '../../ui/LocalizedText';
 import { useStore } from '../../lib/store';
 import { useFeedback } from '../../lib/feedback';
 import { Avatar, Button, Card, Screen, Section, SelectionMark } from '../../ui/components';

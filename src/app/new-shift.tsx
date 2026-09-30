@@ -1,6 +1,8 @@
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Pressable } from '../ui/LocalizedPressable';
+import { Text } from '../ui/LocalizedText';
 import { localDate, repeatShiftDates, ShiftRepeat, today } from '../lib/data';
 import { useFeedback } from '../lib/feedback';
 import { useStore } from '../lib/store';

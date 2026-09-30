@@ -1,12 +1,13 @@
 import { Alert, Platform } from 'react-native';
+import { translateUi } from './i18n';
 
 export function confirmRemoval(title: string, message: string, onConfirm: () => void) {
   if (Platform.OS === 'web') {
-    if (window.confirm(`${title}\n\n${message}`)) onConfirm();
+    if (window.confirm(`${translateUi(title)}\n\n${translateUi(message)}`)) onConfirm();
     return;
   }
-  Alert.alert(title, message, [
-    { text: 'Cancel', style: 'cancel' },
-    { text: 'Remove', style: 'destructive', onPress: onConfirm },
+  Alert.alert(translateUi(title), translateUi(message), [
+    { text: translateUi('Cancel'), style: 'cancel' },
+    { text: translateUi('Remove'), style: 'destructive', onPress: onConfirm },
   ]);
 }

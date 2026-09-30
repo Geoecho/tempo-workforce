@@ -1,5 +1,7 @@
 import React from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Pressable } from './LocalizedPressable';
+import { Text } from './LocalizedText';
 import { localDate, today } from '../lib/data';
 import { C } from './theme';
 

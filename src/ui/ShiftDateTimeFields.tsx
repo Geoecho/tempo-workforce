@@ -1,8 +1,11 @@
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { CalendarDays, ChevronDown, Clock3 } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Modal, Platform, Pressable, Text, View } from 'react-native';
+import { Modal, Platform, View } from 'react-native';
+import { Pressable } from './LocalizedPressable';
+import { Text } from './LocalizedText';
 import { localDate } from '../lib/data';
+import { useLanguage } from '../lib/i18n';
 import { C } from './theme';
 
 type Props = {
@@ -28,6 +31,7 @@ const clockValue = (value: string) => {
 };
 
 export function ShiftDateTimeFields({ date, onDateChange, start, onStartChange, end, onEndChange, dateLocked = false, until, onUntilChange }: Props) {
+  const { language } = useLanguage();
   const [openKey, setOpenKey] = useState<PickerKey | null>(null);
   const [draft, setDraft] = useState(new Date());
   const open = (key: PickerKey) => {
@@ -62,7 +66,7 @@ export function ShiftDateTimeFields({ date, onDateChange, start, onStartChange, 
     <Text style={{ color: C.ink, fontWeight: '700', fontSize: 13, marginBottom: 8 }}>{label}</Text>
     <Pressable accessibilityRole="button" accessibilityLabel={`Choose ${label.toLowerCase()}`} disabled={key === 'date' && dateLocked} onPress={() => open(key)} style={({ pressed }) => ({ backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 13, minHeight: 50, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', opacity: dateLocked && key === 'date' ? .55 : pressed ? .72 : 1 })}>
       {key === 'date' || key === 'until' ? <CalendarDays size={18} color={C.green} /> : <Clock3 size={18} color={C.green} />}
-      <Text style={{ flex: 1, color: C.ink, fontSize: 14, marginLeft: 10 }}>{key === 'date' || key === 'until' ? new Date(`${value}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : value}</Text>
+      <Text style={{ flex: 1, color: C.ink, fontSize: 14, marginLeft: 10 }}>{key === 'date' || key === 'until' ? new Date(`${value}T12:00:00`).toLocaleDateString(language, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : value}</Text>
       <ChevronDown size={16} color={C.muted} />
     </Pressable>
   </View>;

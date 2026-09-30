@@ -1,6 +1,8 @@
 import { CalendarPlus, X } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Pressable } from './LocalizedPressable';
+import { Text } from './LocalizedText';
 import { addShiftToCalendar, CalendarProvider } from '../lib/calendar';
 import type { Shift } from '../lib/data';
 import { Button, Card } from './components';

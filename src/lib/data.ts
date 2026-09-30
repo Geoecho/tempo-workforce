@@ -1,3 +1,5 @@
+import { getCurrentLanguage } from './i18n';
+
 export type Role = 'admin' | 'worker';
 export const CURRENCIES = ['PLN', 'EUR', 'USD', 'GBP', 'CAD', 'AUD', 'CHF', 'SEK', 'NOK', 'DKK', 'CZK', 'HUF', 'RON', 'UAH', 'AED', 'INR', 'SGD', 'JPY', 'BRL', 'MXN', 'ZAR'] as const;
 export type Currency = typeof CURRENCIES[number];
@@ -34,8 +36,8 @@ export const newWorkspaceState = (name: string): State => ({ role: 'admin', sele
 
 export const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 export const today = () => localDate(new Date());
-export const formatDay = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-export const formatTime = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+export const formatDay = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString(getCurrentLanguage(), { weekday: 'short', month: 'short', day: 'numeric' });
+export const formatTime = (iso: string) => new Date(iso).toLocaleTimeString(getCurrentLanguage(), { hour: 'numeric', minute: '2-digit' });
 export const shiftHasEnded = (shift: Shift, now = Date.now()) => {
   const end = new Date(`${shift.date}T${shift.end}:00`);
   if (shift.end <= shift.start) end.setDate(end.getDate() + 1);

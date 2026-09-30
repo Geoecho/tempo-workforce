@@ -1,6 +1,8 @@
 import { ArrowRight, Building2 } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable } from './LocalizedPressable';
+import { Text, TextInput } from './LocalizedText';
 import { C } from './theme';
 
 export function WorkspaceSetup({ email, onCreate, onSignOut }: { email: string; onCreate: (name: string) => Promise<void>; onSignOut: () => Promise<void> }) {
