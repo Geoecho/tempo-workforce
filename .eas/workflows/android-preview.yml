@@ -1,0 +1,35 @@
+name: Android preview
+
+jobs:
+  fingerprint:
+    type: fingerprint
+    environment: preview
+
+  existing_build:
+    needs: [fingerprint]
+    type: get-build
+    params:
+      platform: android
+      profile: preview
+      distribution: internal
+      fingerprint_hash: ${{ needs.fingerprint.outputs.android_fingerprint_hash }}
+      wait_for_in_progress: true
+
+  repack:
+    needs: [existing_build]
+    if: ${{ needs.existing_build.outputs.build_id }}
+    type: repack
+    environment: preview
+    params:
+      build_id: ${{ needs.existing_build.outputs.build_id }}
+      profile: preview
+      js_bundle_only: true
+      message: Latest Tempo app and translations
+
+  build:
+    needs: [existing_build]
+    if: ${{ !needs.existing_build.outputs.build_id }}
+    type: build
+    params:
+      platform: android
+      profile: preview
