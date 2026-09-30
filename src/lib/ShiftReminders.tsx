@@ -6,7 +6,7 @@ import { useFeedback } from './feedback';
 import { useStore } from './store';
 import { WATCH_SCAN_NOTIFICATION } from './WatchSync';
 
-type ReminderShift = { id: string; date: string; start: string; title: string; site: string };
+type ReminderShift = { id: string; date: string; start: string; end: string; title: string; site: string; checkedIn: boolean };
 const KIND = 'tempo-shift-reminder';
 let queue: Promise<void> = Promise.resolve();
 
@@ -47,6 +47,15 @@ async function syncReminders(shifts: ReminderShift[]) {
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(reminder), channelId: 'shift-reminders' },
     });
   }
+  for (const shift of shifts.filter(item => item.checkedIn)) {
+    const end = new Date(`${shift.date}T${shift.end}:00`).getTime();
+    if (!Number.isFinite(end) || end <= Date.now() + 30_000) continue;
+    const reminder = Math.max(Date.now() + 30_000, end - 15 * 60 * 1000);
+    await Notifications.scheduleNotificationAsync({
+      content: { title: 'Shift ending soon', body: `${shift.site} · Remember to scan the site code when you check out.`, data: { kind: KIND, shiftId: shift.id }, sound: false },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(reminder), channelId: 'shift-reminders' },
+    });
+  }
 }
 
 function enqueue(shifts: ReminderShift[]) {
@@ -55,12 +64,12 @@ function enqueue(shifts: ReminderShift[]) {
 }
 
 export function ShiftReminders() {
-  const { ready, role, selectedWorkerId, shifts, notifications } = useStore();
+  const { ready, role, selectedWorkerId, shifts, punches, notifications } = useStore();
   const { ready: feedbackReady, reminders } = useFeedback();
   const seenNotifications = useRef<Set<string> | null>(null);
   const specification = JSON.stringify(shifts
     .filter(shift => !shift.archived && shift.workerIds.includes(selectedWorkerId))
-    .map(({ id, date, start, title, site }) => ({ id, date, start, title, site }))
+    .map(({ id, date, start, end, title, site }) => ({ id, date, start, end, title, site, checkedIn: [...punches].reverse().find(punch => punch.workerId === selectedWorkerId && punch.shiftId === id)?.type === 'in' }))
     .sort((a, b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`)));
 
   useEffect(() => {

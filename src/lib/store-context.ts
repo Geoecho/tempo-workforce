@@ -1,5 +1,5 @@
 import { createContext } from 'react';
-import type { Currency, PaySummary, Punch, Shift, ShiftNotification, State, TimeApproval, Worker } from './data';
+import type { BreakEvent, Currency, PaySummary, Punch, Shift, ShiftNotification, State, TimeApproval, Worker } from './data';
 
 export type Result = { ok: boolean; message: string; type?: 'in' | 'out'; pay?: PaySummary };
 export type Store = State & {
@@ -9,6 +9,7 @@ export type Store = State & {
   accountEmail: string | null;
   notifications: ShiftNotification[];
   approvals: TimeApproval[];
+  breaks: BreakEvent[];
   setRole: (role: State['role']) => void;
   setSelectedWorker: (id: string) => void;
   addTeam: (name: string) => void;
@@ -20,10 +21,11 @@ export type Store = State & {
   setWorkspaceName: (name: string) => void;
   addShift: (shift: Omit<Shift, 'id' | 'status'>) => void;
   addShifts: (shifts: Omit<Shift, 'id' | 'status'>[]) => void;
-  updateShift: (id: string, changes: Partial<Pick<Shift, 'title' | 'site' | 'location' | 'date' | 'start' | 'end' | 'team' | 'workerIds'>>) => void;
+  updateShift: (id: string, changes: Partial<Pick<Shift, 'title' | 'site' | 'location' | 'latitude' | 'longitude' | 'date' | 'start' | 'end' | 'team' | 'workerIds'>>) => void;
   removeShift: (id: string) => void;
   restoreShift: (id: string) => void;
   scan: (payload: string, source?: Punch['source']) => Result | Promise<Result>;
+  toggleBreak: (shiftId: string) => Promise<Result>;
   issueQr: (shiftId: string) => Promise<string>;
   markNotificationRead: (id: string) => Promise<void>;
   reviewTime: (workerId: string, date: string, approve: boolean) => Promise<Result>;

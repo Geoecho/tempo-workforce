@@ -6,6 +6,8 @@ import { useFeedback } from '../../lib/feedback';
 import { Avatar, Button, Card, Screen, Section, SelectionMark } from '../../ui/components';
 import { Field } from '../../ui/Field';
 import { ShiftDateTimeFields } from '../../ui/ShiftDateTimeFields';
+import { SitePinPicker } from '../../ui/SitePinPicker';
+import type { SitePin } from '../../lib/site-location';
 import { C } from '../../ui/theme';
 import { localDate, Shift } from '../../lib/data';
 
@@ -25,6 +27,7 @@ function ShiftEditor({ shift }: { shift: Shift }) {
   const [title, setTitle] = useState(shift.title);
   const [site, setSite] = useState(shift.site);
   const [location, setLocation] = useState(shift.location);
+  const [pin, setPin] = useState<SitePin | null>(shift.latitude !== undefined && shift.longitude !== undefined ? { latitude: shift.latitude, longitude: shift.longitude } : null);
   const [date, setDate] = useState(shift.date);
   const [start, setStart] = useState(shift.start);
   const [end, setEnd] = useState(shift.end);
@@ -37,13 +40,14 @@ function ShiftEditor({ shift }: { shift: Shift }) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(`${date}T12:00:00`).getTime()) || localDate(new Date(`${date}T12:00:00`)) !== date) return setMessage('Use a valid date in YYYY-MM-DD format.');
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(start) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(end) || end <= start) return setMessage('Use valid 24-hour times, with the end after the start.');
     if (!locked && !selected.length) return setMessage('Assign at least one worker.');
-    updateShift(shift.id, { title: title.trim(), site: site.trim(), location: location.trim(), date, start, end, workerIds: selected, team: available.find(w => w.id === selected[0])?.team ?? shift.team });
+    updateShift(shift.id, { title: title.trim(), site: site.trim(), location: location.trim(), latitude: pin?.latitude, longitude: pin?.longitude, date, start, end, workerIds: selected, team: available.find(w => w.id === selected[0])?.team ?? shift.team });
     router.back();
   };
   return <Screen back noNav title="Edit shift" subtitle="Update event details and your assigned crew.">
     <Field label="Shift / event name" value={title} onChangeText={setTitle} placeholder="e.g. Main stage setup" />
     <Field label="Site / project" value={site} onChangeText={setSite} placeholder="e.g. Northline Festival" />
     <Field label="Meeting point" value={location} onChangeText={setLocation} placeholder="e.g. East Gate" />
+    <SitePinPicker pin={pin} onChange={setPin} site={site} location={location} />
     <ShiftDateTimeFields date={date} onDateChange={setDate} start={start} onStartChange={setStart} end={end} onEndChange={setEnd} dateLocked={locked} />
     {locked && <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18 }}>Clock records exist for this shift, so its date and assigned crew are locked.</Text>}
     <Section title="Assigned workers" />

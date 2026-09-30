@@ -1,19 +1,22 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useContext, useEffect, useState } from 'react';
-import { Currency, initialState, parseQr, paySummary, punchCooldownSeconds, Punch, qrPayload, Shift, ShiftNotification, State, TimeApproval, teamNames, today, uid, Worker, MAX_PAID_MINUTES_PER_DAY } from './data';
+import { activeBreak, BreakEvent, Currency, initialState, parseQr, paySummary, punchCooldownSeconds, Punch, qrPayload, Shift, ShiftNotification, State, TimeApproval, teamNames, today, uid, Worker, MAX_PAID_MINUTES_PER_DAY } from './data';
 import { Context, Result } from './store-context';
 import { supabase } from './supabase';
 import { OnlineStoreProvider } from './online-store';
 
 export const KEY = 'tempo-demo-v2';
+const BREAK_KEY = 'tempo-demo-breaks-v1';
 
 function LocalStoreProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<State>(initialState);
   const [notifications, setNotifications] = useState<ShiftNotification[]>([]);
   const [approvals, setApprovals] = useState<TimeApproval[]>([]);
+  const [breaks, setBreaks] = useState<BreakEvent[]>([]);
   const [ready, setReady] = useState(false);
-  useEffect(() => { AsyncStorage.getItem(KEY).then(raw => { if (raw) { const saved = { ...initialState, ...JSON.parse(raw) } as State; saved.workers = saved.workers.map(w => ({ ...w, hourlyRate: w.hourlyRate ?? initialState.workers.find(seed => seed.id === w.id)?.hourlyRate ?? 0, phone: w.phone ?? initialState.workers.find(seed => seed.id === w.id)?.phone })); setState(saved); } }).catch(() => {}).finally(() => setReady(true)); }, []);
+  useEffect(() => { Promise.all([AsyncStorage.getItem(KEY), AsyncStorage.getItem(BREAK_KEY)]).then(([raw, rawBreaks]) => { if (raw) { const saved = { ...initialState, ...JSON.parse(raw) } as State; saved.workers = saved.workers.map(w => ({ ...w, hourlyRate: w.hourlyRate ?? initialState.workers.find(seed => seed.id === w.id)?.hourlyRate ?? 0, phone: w.phone ?? initialState.workers.find(seed => seed.id === w.id)?.phone })); setState(saved); } if (rawBreaks) setBreaks(JSON.parse(rawBreaks)); }).catch(() => {}).finally(() => setReady(true)); }, []);
   useEffect(() => { if (ready) AsyncStorage.setItem(KEY, JSON.stringify(state)).catch(() => {}); }, [state, ready]);
+  useEffect(() => { if (ready) AsyncStorage.setItem(BREAK_KEY, JSON.stringify(breaks)).catch(() => {}); }, [breaks, ready]);
   const setRole = (role: State['role']) => setState(s => role === 'worker' && !s.workers.some(w => !w.archived) ? s : ({ ...s, role }));
   const setSelectedWorker = (selectedWorkerId: string) => setState(s => s.workers.some(w => w.id === selectedWorkerId && !w.archived) ? ({ ...s, selectedWorkerId }) : s);
   const addTeam = (rawName: string) => setState(s => {
@@ -37,7 +40,7 @@ function LocalStoreProvider({ children }: { children: React.ReactNode }) {
   const setWorkspaceName = (rawName: string) => setState(s => rawName.trim() ? { ...s, workspaceName: rawName.trim() } : s);
   const addShift = (shift: Omit<Shift, 'id' | 'status'>) => setState(s => ({ ...s, shifts: [{ ...shift, id: uid(), status: 'upcoming' }, ...s.shifts] }));
   const addShifts = (shifts: Omit<Shift, 'id' | 'status'>[]) => setState(s => ({ ...s, shifts: [...shifts.map(shift => ({ ...shift, id: uid(), status: 'upcoming' as const })), ...s.shifts] }));
-  const updateShift = (id: string, changes: Partial<Pick<Shift, 'title' | 'site' | 'location' | 'date' | 'start' | 'end' | 'team' | 'workerIds'>>) => setState(s => ({ ...s, shifts: s.shifts.map(shift => {
+  const updateShift = (id: string, changes: Partial<Pick<Shift, 'title' | 'site' | 'location' | 'latitude' | 'longitude' | 'date' | 'start' | 'end' | 'team' | 'workerIds'>>) => setState(s => ({ ...s, shifts: s.shifts.map(shift => {
     if (shift.id !== id) return shift;
     const locked = s.punches.some(p => p.shiftId === id);
     return { ...shift, ...changes, ...(locked ? { date: shift.date, workerIds: shift.workerIds } : {}) };
@@ -73,13 +76,24 @@ function LocalStoreProvider({ children }: { children: React.ReactNode }) {
     setApprovals(current => current.filter(a => !(a.workerId === punch.workerId && a.date === punch.workDate)));
     return { ok: true, message: type === 'in' ? `Checked in to ${shift.site}` : `Checked out of ${shift.site}`, type, pay };
   };
-  const reset = () => setState(initialState);
+  const toggleBreak = async (shiftId: string): Promise<Result> => {
+    const shift = state.shifts.find(item => item.id === shiftId && !item.archived && item.date === today() && item.workerIds.includes(state.selectedWorkerId));
+    if (state.role !== 'worker' || !shift) return { ok: false, message: 'This shift is not available to you.' };
+    const punch = [...state.punches].reverse().find(item => item.shiftId === shiftId && item.workerId === state.selectedWorkerId);
+    if (punch?.type !== 'in') return { ok: false, message: 'Check in before starting a break.' };
+    const latest = breaks.filter(item => item.shiftId === shiftId && item.workerId === state.selectedWorkerId && item.at > punch.at).at(-1);
+    if (latest && Date.now() - new Date(latest.at).getTime() < 15_000) return { ok: false, message: 'Please wait a moment before changing your break status.' };
+    const type = activeBreak(breaks, state.punches, shiftId, state.selectedWorkerId) ? 'end' : 'start';
+    setBreaks(current => [...current, { id: uid(), shiftId, workerId: state.selectedWorkerId, type, at: new Date().toISOString(), workDate: shift.date }]);
+    return { ok: true, message: type === 'start' ? 'Paid break started.' : 'Paid break ended.' };
+  };
+  const reset = () => { setState(initialState); setBreaks([]); };
   const reviewTime = async (workerId: string, date: string, approve: boolean): Promise<Result> => {
     if (approve && !state.punches.some(p => p.workerId === workerId && (p.workDate ?? p.at.slice(0, 10)) === date)) return { ok: false, message: 'No recorded time for this day.' };
     setApprovals(current => approve ? [...current.filter(a => !(a.workerId === workerId && a.date === date)), { workerId, date, approvedBy: 'Demo manager', approvedAt: new Date().toISOString() }] : current.filter(a => !(a.workerId === workerId && a.date === date)));
     return { ok: true, message: approve ? 'Time approved.' : 'Approval removed.' };
   };
-  return <Context.Provider value={{ ...state, ready, online: false, syncError: null, accountEmail: null, notifications, approvals, setRole, setSelectedWorker, addTeam, addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, setWorkspaceName, addShift, addShifts, updateShift, removeShift, restoreShift, scan, issueQr: async shiftId => qrPayload(shiftId), markNotificationRead: async id => setNotifications(current => current.map(item => item.id === id ? { ...item, readAt: new Date().toISOString() } : item)), reviewTime, reset, inviteWorker: async () => ({ ok: false, message: 'Online database is not configured.' }), signOut: async () => {} }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ ...state, ready, online: false, syncError: null, accountEmail: null, notifications, approvals, breaks, setRole, setSelectedWorker, addTeam, addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, setWorkspaceName, addShift, addShifts, updateShift, removeShift, restoreShift, scan, toggleBreak, issueQr: async shiftId => qrPayload(shiftId), markNotificationRead: async id => setNotifications(current => current.map(item => item.id === id ? { ...item, readAt: new Date().toISOString() } : item)), reviewTime, reset, inviteWorker: async () => ({ ok: false, message: 'Online database is not configured.' }), signOut: async () => {} }}>{children}</Context.Provider>;
 }
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   return supabase ? <OnlineStoreProvider>{children}</OnlineStoreProvider> : <LocalStoreProvider>{children}</LocalStoreProvider>;

@@ -1,21 +1,31 @@
 import { router } from 'expo-router';
 import { Clock3, Plus, QrCode, TrendingUp, UsersRound, Wallet } from 'lucide-react-native';
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { formatMoney, formatTime, initialState, paySummary, payTimeLabel, today } from '../lib/data';
+import { activeBreak, formatMoney, formatTime, initialState, paySummary, payTimeLabel, today } from '../lib/data';
 import { useStore } from '../lib/store';
 import { Button, Card, Pill, Screen, Section } from '../ui/components';
 import { ShiftCard } from '../ui/ShiftCard';
 import { C } from '../ui/theme';
 
 export default function Home() {
-  const { role, workers, shifts, punches, selectedWorkerId, currency, workspaceName } = useStore();
+  const { role, workers, shifts, punches, breaks, toggleBreak, selectedWorkerId, currency, workspaceName } = useStore();
+  const [breakBusy, setBreakBusy] = useState(false);
+  const [breakMessage, setBreakMessage] = useState('');
   const worker = workers.find(w => w.id === selectedWorkerId && !w.archived) ?? workers.find(w => !w.archived) ?? { ...initialState.workers[0], name: workspaceName || 'Tempo', initials: (workspaceName || 'Tempo').slice(0, 1).toUpperCase() };
   const day = today();
   const todays = shifts.filter(s => !s.archived && s.date === day && (role === 'admin' || s.workerIds.includes(selectedWorkerId)));
   const scheduled = shifts.filter(s => !s.archived && s.date >= day && (role === 'admin' || s.workerIds.includes(selectedWorkerId))).sort((a, b) => a.date.localeCompare(b.date));
   const active = [...punches].reverse().find(p => p.workerId === selectedWorkerId);
-  const isIn = active?.type === 'in';
+  const isIn = active?.type === 'in' && shifts.some(shift => shift.id === active.shiftId && shift.date === day && !shift.archived);
+  const onBreak = isIn && active ? activeBreak(breaks, punches, active.shiftId, selectedWorkerId) : null;
+  const changeBreak = async () => {
+    if (!isIn || !active || breakBusy) return;
+    setBreakBusy(true);
+    const result = await toggleBreak(active.shiftId);
+    setBreakMessage(result.message);
+    setBreakBusy(false);
+  };
   const myPay = paySummary(punches, worker, day);
   const teamPay = workers.reduce((sum, w) => sum + paySummary(punches, w, day).earningsCents, 0);
   return <Screen>
@@ -27,7 +37,7 @@ export default function Home() {
       <Section title="Upcoming shifts" action="See all" onAction={() => router.push('/schedule')} />{scheduled.slice(0, 3).map(s => <ShiftCard shift={s} key={s.id} compact />)}
       <Section title="Quick actions" /><View style={{ flexDirection: 'row', gap: 10 }}><Pressable style={{ flex: 1 }} onPress={() => router.push('/team')}><Card style={{ padding: 15 }}><UsersRound size={20} color={C.green} /><Text style={{ color: C.ink, fontSize: 14, fontWeight: '700', marginTop: 10 }}>Contact team  →</Text></Card></Pressable><Pressable style={{ flex: 1 }} onPress={() => router.push('/time')}><Card style={{ padding: 15 }}><TrendingUp size={20} color={C.green} /><Text style={{ color: C.ink, fontSize: 14, fontWeight: '700', marginTop: 10 }}>Review pay  →</Text></Card></Pressable></View>
     </> : <>
-      <Card style={{ backgroundColor: C.green, borderColor: C.green, padding: 22 }}><View style={{ flexDirection: 'row', justifyContent: 'space-between' }}><Text style={{ color: '#C5E1D1', fontSize: 13, fontWeight: '600' }}>YOUR STATUS</Text><Pill tone={isIn ? 'green' : 'gray'}>{isIn ? 'ON THE CLOCK' : 'OFF THE CLOCK'}</Pill></View><Text style={{ color: '#FFFFFF', fontSize: 30, fontWeight: '700', marginTop: 15 }}>{isIn ? 'You’re clocked in' : 'Ready for your shift?'}</Text><Text style={{ color: '#C5E1D1', fontSize: 13, marginTop: 6 }}>{isIn ? `Since ${formatTime(active.at)}` : 'Scan your site code when you arrive.'}</Text><View style={{ marginTop: 22 }}><Button label={isIn ? 'Scan to check out' : 'Scan to check in'} variant="light" icon={<QrCode size={17} color={C.green} />} onPress={() => router.push('/scan')} /></View></Card>
+      <Card style={{ backgroundColor: C.green, borderColor: C.green, padding: 22 }}><View style={{ flexDirection: 'row', justifyContent: 'space-between' }}><Text style={{ color: '#C5E1D1', fontSize: 13, fontWeight: '600' }}>YOUR STATUS</Text><Pill tone={isIn ? 'green' : 'gray'}>{onBreak ? 'PAID BREAK' : isIn ? 'ON THE CLOCK' : 'OFF THE CLOCK'}</Pill></View><Text style={{ color: '#FFFFFF', fontSize: 30, fontWeight: '700', marginTop: 15 }}>{onBreak ? 'Take your break.' : isIn ? 'You’re clocked in' : 'Ready for your shift?'}</Text><Text style={{ color: '#C5E1D1', fontSize: 13, marginTop: 6 }}>{onBreak ? `Break started ${formatTime(onBreak.at)} · Time remains paid` : isIn && active ? `Since ${formatTime(active.at)}` : 'Scan your site code when you arrive.'}</Text><View style={{ marginTop: 22 }}><Button label={isIn ? 'Scan to check out' : 'Scan to check in'} variant="light" icon={<QrCode size={17} color={C.green} />} onPress={() => router.push('/scan')} /></View>{isIn && <Pressable accessibilityRole="button" disabled={breakBusy} onPress={() => void changeBreak()} style={{ alignItems: 'center', paddingVertical: 13, marginTop: 8 }}><Text style={{ color: '#E0F2E6', fontSize: 13, fontWeight: '800' }}>{breakBusy ? 'Saving…' : onBreak ? 'End paid break' : 'Start paid break'}</Text></Pressable>}{!!breakMessage && <Text style={{ color: '#E0F2E6', fontSize: 11, textAlign: 'center' }}>{breakMessage}</Text>}</Card>
       <Section title="Your next shift" action="Schedule" onAction={() => router.push('/schedule')} />{scheduled[0] ? <ShiftCard shift={scheduled[0]} /> : <Card><Text style={{ color: C.muted }}>No upcoming shifts assigned.</Text></Card>}
       <Section title="Your pay today" action="View timesheet" onAction={() => router.push('/time')} /><Card><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}><View><Text style={{ color: C.muted, fontSize: 12 }}>ESTIMATED EARNINGS</Text><Text style={{ color: C.ink, fontSize: 29, fontWeight: '700', marginTop: 7 }}>{formatMoney(myPay.earningsCents, currency)}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>{payTimeLabel(myPay.payableSeconds)} paid · 10h daily cap</Text></View><View style={{ width: 47, height: 47, borderRadius: 15, backgroundColor: C.mint, justifyContent: 'center', alignItems: 'center' }}><Clock3 color={C.green} size={22} /></View></View></Card>
     </>}

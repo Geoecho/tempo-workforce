@@ -33,6 +33,12 @@
       "expo-audio",
       "expo-notifications",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Tempo to set a precise site meeting point when you choose your current location."
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Allow Tempo to choose a team member profile photo.",

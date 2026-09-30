@@ -7,6 +7,8 @@ import { useStore } from '../lib/store';
 import { Avatar, Button, Card, Screen, Section, SelectionMark } from '../ui/components';
 import { Field } from '../ui/Field';
 import { ShiftDateTimeFields } from '../ui/ShiftDateTimeFields';
+import { SitePinPicker } from '../ui/SitePinPicker';
+import type { SitePin } from '../lib/site-location';
 import { C } from '../ui/theme';
 
 const defaultRepeatUntil = (value: string) => {
@@ -26,6 +28,7 @@ export default function NewShift() {
   const [title, setTitle] = useState('');
   const [site, setSite] = useState('');
   const [location, setLocation] = useState('');
+  const [pin, setPin] = useState<SitePin | null>(null);
   const [date, setDate] = useState(today());
   const [until, setUntil] = useState(() => defaultRepeatUntil(today()));
   const [repeat, setRepeat] = useState<ShiftRepeat>('once');
@@ -48,11 +51,11 @@ export default function NewShift() {
     maxRepeatDate.setDate(maxRepeatDate.getDate() + 30);
     if (repeat !== 'once' && (until < date || until > localDate(maxRepeatDate))) return setMessage('Choose a repeat end date within 31 days of the first shift.');
     if (!dates.length) return setMessage('No workdays fall in this date range.');
-    addShifts(dates.map(day => ({ title: title.trim(), site: site.trim(), location: location.trim(), date: day, start, end, team: workers.find(w => w.id === selected[0])?.team ?? 'General', workerIds: selected })));
+    addShifts(dates.map(day => ({ title: title.trim(), site: site.trim(), location: location.trim(), ...(pin ?? {}), date: day, start, end, team: workers.find(w => w.id === selected[0])?.team ?? 'General', workerIds: selected })));
     router.replace('/schedule');
   };
   if (role !== 'admin') return <Screen back title="Admin only"><Text>This action requires an admin account.</Text></Screen>;
-  return <Screen back noNav title="Create a shift" subtitle="Schedule one day or a month at the same place."><Field label="Shift name" value={title} onChangeText={setTitle} placeholder="e.g. Main stage setup" /><Field label="Site / project" value={site} onChangeText={setSite} placeholder="e.g. Northline Festival" /><Field label="Meeting point" value={location} onChangeText={setLocation} placeholder="e.g. East Gate" /><ShiftDateTimeFields date={date} onDateChange={changeDate} start={start} onStartChange={setStart} end={end} onEndChange={setEnd} until={repeat === 'once' ? undefined : until} onUntilChange={repeat === 'once' ? undefined : setUntil} />
+  return <Screen back noNav title="Create a shift" subtitle="Schedule one day or a month at the same place."><Field label="Shift name" value={title} onChangeText={setTitle} placeholder="e.g. Main stage setup" /><Field label="Site / project" value={site} onChangeText={setSite} placeholder="e.g. Northline Festival" /><Field label="Meeting point" value={location} onChangeText={setLocation} placeholder="e.g. East Gate" /><SitePinPicker pin={pin} onChange={setPin} site={site} location={location} /><ShiftDateTimeFields date={date} onDateChange={changeDate} start={start} onStartChange={setStart} end={end} onEndChange={setEnd} until={repeat === 'once' ? undefined : until} onUntilChange={repeat === 'once' ? undefined : setUntil} />
     <Text style={{ color: C.ink, fontWeight: '700', fontSize: 13, marginBottom: 8 }}>Repeat</Text>
     <View style={{ flexDirection: 'row', gap: 7, marginBottom: 8 }}>{([['once', 'One day'], ['daily', 'Every day'], ['weekdays', 'Weekdays']] as const).map(([value, label]) => <Pressable key={value} accessibilityRole="radio" accessibilityState={{ selected: repeat === value }} onPress={() => { play('select'); setRepeat(value); setMessage(''); }} style={{ flex: 1, minHeight: 45, borderRadius: 12, borderWidth: 1, borderColor: repeat === value ? C.green : C.line, backgroundColor: repeat === value ? C.mint : C.surface, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}><Text style={{ color: repeat === value ? C.green : C.muted, fontWeight: '700', fontSize: 12 }}>{label}</Text></Pressable>)}</View>
     {repeat !== 'once' && <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, marginBottom: 10 }}>{dates.length} separate daily shifts will be created. Each day has its own QR code and clock history. You can change a day later.</Text>}

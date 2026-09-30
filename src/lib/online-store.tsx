@@ -5,7 +5,7 @@ import { AuthScreen } from '../ui/AuthScreen';
 import { PasswordRecovery } from '../ui/PasswordRecovery';
 import { WorkspaceSetup } from '../ui/WorkspaceSetup';
 import { C } from '../ui/theme';
-import { Currency, initialState, newWorkspaceState, paySummary, Punch, Shift, ShiftNotification, State, TimeApproval, teamNames, today, uid, Worker } from './data';
+import { BreakEvent, Currency, initialState, newWorkspaceState, paySummary, Punch, Shift, ShiftNotification, State, TimeApproval, teamNames, today, uid, Worker } from './data';
 import { Context, Result } from './store-context';
 import { recoveryRedirect, supabase } from './supabase';
 
@@ -18,6 +18,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   const [state, setState] = useState<State>(initialState);
   const [notifications, setNotifications] = useState<ShiftNotification[]>([]);
   const [approvals, setApprovals] = useState<TimeApproval[]>([]);
+  const [breaks, setBreaks] = useState<BreakEvent[]>([]);
   const [ready, setReady] = useState(false);
   const [waitingForInvite, setWaitingForInvite] = useState(false);
   const [needsWorkspaceSetup, setNeedsWorkspaceSetup] = useState(false);
@@ -45,8 +46,9 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const loadSnapshot = useCallback(async (): Promise<State | null> => {
-    const { data, error } = await client.rpc('tempo_snapshot');
+    const [{ data, error }, { data: breakData, error: breakError }] = await Promise.all([client.rpc('tempo_snapshot'), client.rpc('tempo_break_snapshot')]);
     if (error) throw error;
+    if (breakError) throw breakError;
     if (!data) return null;
     const snapshot = data as Snapshot;
     versionRef.current = snapshot.version;
@@ -54,6 +56,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
     setState(snapshot.state);
     setNotifications(snapshot.notifications ?? []);
     setApprovals(snapshot.approvals ?? []);
+    setBreaks((breakData as BreakEvent[] | null) ?? []);
     setWorkspaceId(snapshot.workspaceId);
     return snapshot.state;
   }, []);
@@ -155,7 +158,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   const setWorkspaceName = (rawName: string) => commit(s => rawName.trim() ? { ...s, workspaceName: rawName.trim() } : s);
   const addShift = (shift: Omit<Shift, 'id' | 'status'>) => commit(s => ({ ...s, shifts: [{ ...shift, id: uid(), status: 'upcoming' }, ...s.shifts] }));
   const addShifts = (shifts: Omit<Shift, 'id' | 'status'>[]) => commit(s => ({ ...s, shifts: [...shifts.map(shift => ({ ...shift, id: uid(), status: 'upcoming' as const })), ...s.shifts] }));
-  const updateShift = (id: string, changes: Partial<Pick<Shift, 'title' | 'site' | 'location' | 'date' | 'start' | 'end' | 'team' | 'workerIds'>>) => commit(s => ({
+  const updateShift = (id: string, changes: Partial<Pick<Shift, 'title' | 'site' | 'location' | 'latitude' | 'longitude' | 'date' | 'start' | 'end' | 'team' | 'workerIds'>>) => commit(s => ({
     ...s, shifts: s.shifts.map(shift => shift.id !== id ? shift : { ...shift, ...changes, ...(s.punches.some(p => p.shiftId === id) ? { date: shift.date, workerIds: shift.workerIds } : {}) }),
   }));
   const removeShift = (id: string) => commit(s => {
@@ -174,6 +177,12 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
     } catch {
       return data as Result;
     }
+  };
+  const toggleBreak = async (shiftId: string): Promise<Result> => {
+    const { data, error } = await client.rpc('tempo_record_break', { p_shift_id: shiftId });
+    if (error) return { ok: false, message: error.message };
+    await loadSnapshot();
+    return data as Result;
   };
 
   const issueQr = useCallback(async (shiftId: string): Promise<string> => {
@@ -218,10 +227,10 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   </View>;
 
   return <Context.Provider value={{
-    ...state, ready, online: true, syncError, accountEmail: session.user.email ?? null, notifications, approvals,
+    ...state, ready, online: true, syncError, accountEmail: session.user.email ?? null, notifications, approvals, breaks,
     setRole: () => {}, setSelectedWorker: () => {}, addTeam,
     addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, setWorkspaceName,
-    addShift, addShifts, updateShift, removeShift, restoreShift, scan, issueQr, markNotificationRead, reviewTime, reset: () => {},
+    addShift, addShifts, updateShift, removeShift, restoreShift, scan, toggleBreak, issueQr, markNotificationRead, reviewTime, reset: () => {},
     inviteWorker, signOut: async () => { await client.auth.signOut(); },
   }}>{children}</Context.Provider>;
 }

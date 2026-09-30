@@ -60,10 +60,10 @@ struct ContentView: View {
             HStack {
                 Text("tempo.").font(.system(size: 18, weight: .bold, design: .rounded))
                 Spacer()
-                Circle().fill(model.status == "onShift" ? mint : .gray).frame(width: 7, height: 7)
+                Circle().fill(model.status == "onShift" || model.status == "onBreak" ? mint : .gray).frame(width: 7, height: 7)
             }
             Spacer(minLength: 2)
-            Text(model.status == "onShift" ? "ON SHIFT" : model.status == "complete" ? "SHIFT COMPLETE" : model.status == "upcoming" ? "NEXT SHIFT" : "WORKER STATUS")
+            Text(model.status == "onBreak" ? "ON PAID BREAK" : model.status == "onShift" ? "ON SHIFT" : model.status == "complete" ? "SHIFT COMPLETE" : model.status == "upcoming" ? "NEXT SHIFT" : "WORKER STATUS")
                 .font(.system(size: 10, weight: .bold, design: .rounded))
                 .tracking(1.2).foregroundStyle(mint)
             Text(model.time.isEmpty ? model.title : model.time)

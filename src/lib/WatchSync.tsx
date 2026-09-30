@@ -2,13 +2,13 @@ import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { AppState, Platform } from 'react-native';
-import { formatDay, shiftHasEnded, today } from './data';
+import { activeBreak, formatDay, shiftHasEnded, today } from './data';
 import { useStore } from './store';
 
 export const WATCH_SCAN_NOTIFICATION = 'tempo-watch-scan';
 
 export function WatchSync() {
-  const { ready, role, selectedWorkerId, shifts, punches } = useStore();
+  const { ready, role, selectedWorkerId, shifts, punches, breaks } = useStore();
   const active = shifts.find(shift => !shift.archived && shift.date === today() && shift.workerIds.includes(selectedWorkerId)
     && punches.filter(punch => punch.shiftId === shift.id && punch.workerId === selectedWorkerId).sort((a, b) => b.at.localeCompare(a.at))[0]?.type === 'in');
   const next = shifts.filter(shift => !shift.archived && shift.workerIds.includes(selectedWorkerId) && !shiftHasEnded(shift))
@@ -16,12 +16,13 @@ export function WatchSync() {
   const lastCompleted = shifts.filter(shift => !shift.archived && shift.workerIds.includes(selectedWorkerId) && shift.date === today()
     && punches.some(punch => punch.shiftId === shift.id && punch.workerId === selectedWorkerId && punch.type === 'out'))[0];
   const shift = active ?? next ?? lastCompleted;
-  const status = active ? 'onShift' : next ? 'upcoming' : lastCompleted ? 'complete' : 'none';
+  const onBreak = active ? activeBreak(breaks, punches, active.id, selectedWorkerId) : null;
+  const status = onBreak ? 'onBreak' : active ? 'onShift' : next ? 'upcoming' : lastCompleted ? 'complete' : 'none';
   const context = JSON.stringify({
     status: role === 'worker' ? status : 'none',
     title: role === 'worker' ? shift?.title ?? 'No shift scheduled' : 'Sign in as a worker',
     site: role === 'worker' ? shift?.site ?? '' : '',
-    time: role === 'worker' && shift ? active ? 'Checked in' : status === 'complete' ? 'Done today' : shift.start : '',
+    time: role === 'worker' && shift ? onBreak ? 'Paid break' : active ? 'Checked in' : status === 'complete' ? 'Done today' : shift.start : '',
     note: role === 'worker' && shift ? `${formatDay(shift.date)} · ${shift.start}–${shift.end}` : 'Open Tempo on iPhone',
   });
 

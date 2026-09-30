@@ -2,8 +2,9 @@ export type Role = 'admin' | 'worker';
 export const CURRENCIES = ['PLN', 'EUR', 'USD', 'GBP', 'CAD', 'AUD', 'CHF', 'SEK', 'NOK', 'DKK', 'CZK', 'HUF', 'RON', 'UAH', 'AED', 'INR', 'SGD', 'JPY', 'BRL', 'MXN', 'ZAR'] as const;
 export type Currency = typeof CURRENCIES[number];
 export type Worker = { id: string; name: string; initials: string; role: string; team: string; color: string; phone?: string; photoUri?: string; hourlyRate: number; archived?: boolean };
-export type Shift = { id: string; title: string; site: string; location: string; date: string; start: string; end: string; team: string; workerIds: string[]; status: 'upcoming' | 'active' | 'completed'; archived?: boolean };
+export type Shift = { id: string; title: string; site: string; location: string; latitude?: number; longitude?: number; date: string; start: string; end: string; team: string; workerIds: string[]; status: 'upcoming' | 'active' | 'completed'; archived?: boolean };
 export type Punch = { id: string; shiftId: string; workerId: string; type: 'in' | 'out'; at: string; source: 'qr' | 'demo'; rateAtCheckIn?: number; workDate?: string };
+export type BreakEvent = { id: string; shiftId: string; workerId: string; type: 'start' | 'end'; at: string; workDate: string };
 export type ShiftNotification = { id: string; workerId: string; shiftId: string; kind: 'assigned' | 'changed' | 'removed'; title: string; body: string; createdAt: string; readAt: string | null };
 export type TimeApproval = { workerId: string; date: string; approvedBy: string; approvedAt: string };
 export type State = { role: Role; selectedWorkerId: string; currency: Currency; workspaceName?: string; teams?: string[]; workers: Worker[]; shifts: Shift[]; punches: Punch[] };
@@ -44,6 +45,12 @@ export const shiftHasOpenPunch = (shiftId: string, punches: Punch[]) => {
   const latest = new Map<string, Punch>();
   for (const punch of punches.filter(item => item.shiftId === shiftId).sort((a, b) => a.at.localeCompare(b.at))) latest.set(punch.workerId, punch);
   return [...latest.values()].some(punch => punch.type === 'in');
+};
+export const activeBreak = (breaks: BreakEvent[], punches: Punch[], shiftId: string, workerId: string) => {
+  const punch = punches.filter(item => item.shiftId === shiftId && item.workerId === workerId).sort((a, b) => b.at.localeCompare(a.at))[0];
+  if (!punch || punch.type !== 'in') return null;
+  const event = breaks.filter(item => item.shiftId === shiftId && item.workerId === workerId && item.at > punch.at).sort((a, b) => b.at.localeCompare(a.at))[0];
+  return event?.type === 'start' ? event : null;
 };
 export type ShiftRepeat = 'once' | 'daily' | 'weekdays';
 export const repeatShiftDates = (start: string, until: string, repeat: ShiftRepeat): string[] => {
