@@ -1,8 +1,8 @@
 import { router, usePathname } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft } from 'lucide-react-native';
+import { Check, ChevronLeft } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { AccessibilityInfo, Animated, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, Animated, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Worker } from '../lib/data';
 import { useStore } from '../lib/store';
@@ -10,6 +10,7 @@ import { AppIcon, AppIconName } from './AppIcon';
 import { C } from './theme';
 
 export function Avatar({ worker, size = 36 }: { worker: Worker; size?: number }) { return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: worker.color, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: size * .32, fontWeight: '700', color: C.green }}>{worker.initials}</Text></View>; }
+export function SelectionMark({ selected, round = false }: { selected: boolean; round?: boolean }) { return <View style={{ width: 20, height: 20, borderRadius: round ? 10 : 6, borderWidth: 1.5, borderColor: C.green, backgroundColor: selected ? C.green : 'transparent', alignItems: 'center', justifyContent: 'center' }}>{selected && <Check size={14} strokeWidth={3} color="#FFFFFF" />}</View>; }
 export function Pill({ children, tone = 'green' }: { children: React.ReactNode; tone?: 'green' | 'gray' | 'orange' }) { return <View style={[styles.pill, { backgroundColor: tone === 'green' ? C.mint : tone === 'orange' ? C.orange : '#F1F2F0' }]}><Text style={{ color: tone === 'green' ? C.green : tone === 'orange' ? '#936C31' : C.muted, fontSize: 11, fontWeight: '700' }}>{children}</Text></View>; }
 export function Button({ label, onPress, icon, variant = 'primary', small = false }: { label: string; onPress: () => void; icon?: React.ReactNode; variant?: 'primary' | 'light' | 'outline' | 'danger'; small?: boolean }) {
   const [scale] = useState(() => new Animated.Value(1));
@@ -30,8 +31,14 @@ export function Screen({ children, title, subtitle, back = false, action, noNav 
   const { role } = useStore();
   const { width } = useWindowDimensions();
   const desktop = Platform.OS === 'web' && width >= 960;
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [entrance] = useState(() => new Animated.Value(0));
   useEffect(() => { AccessibilityInfo.isReduceMotionEnabled().then(reduced => { if (reduced) entrance.setValue(1); else Animated.timing(entrance, { toValue: 1, duration: 260, useNativeDriver: Platform.OS !== 'web' }).start(); }).catch(() => entrance.setValue(1)); }, [entrance]);
+  useEffect(() => {
+    const shown = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardOpen(true));
+    const hidden = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardOpen(false));
+    return () => { shown.remove(); hidden.remove(); };
+  }, []);
 
   const topbar = <View style={[styles.topbar, desktop && styles.desktopTopbar]}>
     {back ? <Pressable accessibilityLabel="Go back" onPress={() => router.back()} style={styles.topIcon}><ChevronLeft size={23} color={C.ink} /></Pressable> : !desktop && <View style={styles.topIcon} />}
@@ -40,7 +47,7 @@ export function Screen({ children, title, subtitle, back = false, action, noNav 
     </View>
     {action ?? <View style={styles.topIcon} />}
   </View>;
-  const content = <ScrollView contentContainerStyle={[styles.body, desktop && styles.desktopBody]} showsVerticalScrollIndicator={false}>
+  const content = <ScrollView contentContainerStyle={[styles.body, desktop && styles.desktopBody]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>
     <Animated.View style={{ opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }}>
       {title && <View style={styles.pageHeading}><Text style={styles.title}>{title}</Text>{subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}</View>}
       {children}
@@ -51,12 +58,17 @@ export function Screen({ children, title, subtitle, back = false, action, noNav 
     {desktop ? <View style={styles.desktopShell}>
       {!noNav && <BottomNav role={role} desktop />}
       <View style={styles.desktopMain}>{topbar}{content}</View>
-    </View> : <>{topbar}{content}{!noNav && <BottomNav role={role} />}</>}
+    </View> : <>{topbar}{content}{!noNav && !keyboardOpen && <BottomNav role={role} />}</>}
   </SafeAreaView>;
 }
 function BottomNav({ role, desktop = false }: { role: 'admin' | 'worker'; desktop?: boolean }) {
   const path = usePathname();
   const [hovered, setHovered] = useState<string | null>(null);
+  const [activated, setActivated] = useState<string | null>(path);
+  useEffect(() => {
+    const timer = setTimeout(() => setActivated(null), 650);
+    return () => clearTimeout(timer);
+  }, [path, activated]);
   const tabs = role === 'admin' ? [
     { href: '/', label: 'Home', icon: 'home' }, { href: '/schedule', label: 'Shifts', icon: 'calendar' }, { href: '/team', label: 'Team', icon: 'team' }, { href: '/time', label: 'Time', icon: 'time' }, { href: '/settings', label: 'More', icon: 'settings' },
   ] : [
@@ -66,8 +78,8 @@ function BottomNav({ role, desktop = false }: { role: 'admin' | 'worker'; deskto
     {desktop && <View style={styles.sideBrandBox}><Text style={styles.brand}>tempo<Text style={{ color: '#69A889' }}>.</Text></Text><Text style={styles.sideCaption}>WORKFORCE</Text></View>}
     {tabs.map(({ href, label, icon }) => {
       const active = path === href || (href === '/schedule' && (path.startsWith('/shift/') || path.startsWith('/edit-shift/'))) || (href === '/team' && path.startsWith('/worker/'));
-      return <Pressable key={href} accessibilityRole="link" onHoverIn={() => setHovered(href)} onHoverOut={() => setHovered(null)} onFocus={() => setHovered(href)} onBlur={() => setHovered(null)} onPress={() => { if (path !== href && Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {}); router.replace(href as never); }} style={desktop ? [styles.sideNavItem, active && styles.sideNavActive] : styles.navItem}>
-        <View style={desktop ? styles.sideIcon : [styles.navIcon, active && styles.navActive]}><AppIcon name={icon as AppIconName} size={20} color={active ? C.green : '#929B95'} playing={hovered === href} /></View>
+      return <Pressable key={href} accessibilityRole="tab" accessibilityState={{ selected: active }} onHoverIn={() => setHovered(href)} onHoverOut={() => setHovered(null)} onFocus={() => setHovered(href)} onBlur={() => setHovered(null)} onPress={() => { setActivated(href); if (path !== href && Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {}); if (path !== href) router.replace(href as never); }} style={desktop ? [styles.sideNavItem, active && styles.sideNavActive] : styles.navItem}>
+        <View style={desktop ? styles.sideIcon : [styles.navIcon, active && styles.navActive]}><AppIcon name={icon as AppIconName} size={20} color={active ? C.green : '#929B95'} playing={hovered === href || activated === href} /></View>
         <Text style={desktop ? [styles.sideLabel, active && styles.sideLabelActive] : [styles.navLabel, active && { color: C.green, fontWeight: '700' }]}>{label}</Text>
       </Pressable>;
     })}

@@ -1,8 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { Phone, Trash2 } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
-import { formatMoney, Worker } from '../../lib/data';
+import { formatDay, formatMoney, formatTime, hoursLabel, localDate, paySummary, today, Worker } from '../../lib/data';
 import { confirmRemoval } from '../../lib/confirm';
 import { callWorker } from '../../lib/phone';
 import { useStore } from '../../lib/store';
@@ -35,14 +35,41 @@ function WorkerEditor({ worker }: { worker: Worker }) {
     router.back();
   };
   const call = async () => { if (!await callWorker(phone)) setMessage('Add a valid phone number to call this worker.'); };
-  const hasHistory = punches.some(p => p.workerId === worker.id);
-  const onSite = shifts.some(shift => [...punches].reverse().find(p => p.workerId === worker.id && p.shiftId === shift.id)?.type === 'in');
+  const { hasHistory, activePunch, activeShift, onSite, minutesThisMonth, payThisMonth, upcoming, completed } = useMemo(() => {
+    const workerPunches = punches.filter(p => p.workerId === worker.id).sort((a, b) => a.at.localeCompare(b.at));
+    const lastByShift = new Map(workerPunches.map(p => [p.shiftId, p]));
+    const activePunch = [...lastByShift.values()].find(p => p.type === 'in');
+    const month = today().slice(0, 7);
+    const workDates = [...new Set(workerPunches.map(p => p.workDate ?? localDate(new Date(p.at))).filter(date => date.startsWith(month)))];
+    const thisMonth = workDates.map(date => paySummary(punches, worker, date));
+    return {
+      hasHistory: workerPunches.length > 0,
+      activePunch,
+      activeShift: shifts.find(shift => shift.id === activePunch?.shiftId),
+      onSite: !!activePunch,
+      minutesThisMonth: thisMonth.reduce((total, day) => total + day.actualMinutes, 0),
+      payThisMonth: thisMonth.reduce((total, day) => total + day.earningsCents, 0),
+      upcoming: shifts.filter(shift => !shift.archived && shift.workerIds.includes(worker.id) && shift.date >= today() && !lastByShift.has(shift.id)).length,
+      completed: [...lastByShift.values()].filter(p => p.type === 'out').length,
+    };
+  }, [punches, shifts, worker]);
   const remove = () => {
     if (onSite) return setMessage('Check this worker out before removing the profile.');
     confirmRemoval('Remove worker?', hasHistory ? 'This worker will leave the active team. Past time and pay records remain available.' : 'This worker will be removed from the team and future assignments.', () => { removeWorker(worker.id); router.replace('/team'); });
   };
-  return <Screen back noNav title="Worker profile" subtitle="Contact details and pay rate">
-    <Card style={{ flexDirection: 'row', alignItems: 'center' }}><Avatar worker={worker} size={51} /><View style={{ flex: 1, marginLeft: 13 }}><Text style={{ color: C.ink, fontSize: 17, fontWeight: '700' }}>{worker.name}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{worker.role} · {worker.team}</Text></View></Card>
+  return <Screen back noNav title="Worker profile" subtitle="Live status, work history, and contact details">
+    <Card style={{ flexDirection: 'row', alignItems: 'center' }}><Avatar worker={worker} size={51} /><View style={{ flex: 1, marginLeft: 13 }}><Text style={{ color: C.ink, fontSize: 17, fontWeight: '700' }}>{worker.name}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{worker.role} · {worker.team}</Text></View><View style={{ backgroundColor: onSite ? C.mint : '#F1F2F0', paddingHorizontal: 9, paddingVertical: 6, borderRadius: 16 }}><Text style={{ color: onSite ? C.green : C.muted, fontSize: 11, fontWeight: '700' }}>{onSite ? 'Active now' : 'Off the clock'}</Text></View></Card>
+    {activePunch && <Card style={{ marginTop: 12, backgroundColor: C.mint, borderColor: '#D4E9DA' }}><Text style={{ color: C.green, fontSize: 12, fontWeight: '700' }}>CURRENTLY CHECKED IN</Text><Text style={{ color: C.ink, fontSize: 16, fontWeight: '700', marginTop: 5 }}>{activeShift?.title ?? 'Active shift'}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>{activeShift?.site ? `${activeShift.site} · ` : ''}Since {formatTime(activePunch.at)}</Text></Card>}
+    <Section title="At a glance" />
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+      {[
+        { label: 'Hours this month', value: hoursLabel(minutesThisMonth) },
+        { label: 'Estimated pay', value: formatMoney(payThisMonth, currency) },
+        { label: 'Upcoming shifts', value: String(upcoming) },
+        { label: 'Completed shifts', value: String(completed) },
+      ].map(stat => <Card key={stat.label} style={{ width: '48%', flexGrow: 1, padding: 15 }}><Text style={{ color: C.muted, fontSize: 11, fontWeight: '600' }}>{stat.label}</Text><Text style={{ color: C.ink, fontSize: 20, fontWeight: '700', marginTop: 7 }}>{stat.value}</Text></Card>)}
+    </View>
+    {activeShift && <Text style={{ color: C.muted, fontSize: 12, marginTop: 12 }}>Assigned {formatDay(activeShift.date)}</Text>}
     <View style={{ marginTop: 12 }}><Button label={phone ? `Call ${worker.name.split(' ')[0]}` : 'Add a phone to call'} variant="outline" icon={<Phone size={17} color={C.green} />} onPress={call} /></View>
     <Section title="Edit details" />
     <Field label="Full name" value={name} onChangeText={setName} placeholder="Full name" />

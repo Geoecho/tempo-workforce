@@ -22,7 +22,13 @@
     },
     "plugins": [
       "expo-router",
-      ["expo-camera", { "cameraPermission": "Allow Tempo to scan site check-in codes." }]
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Tempo to scan site check-in codes."
+        }
+      ],
+      "@react-native-community/datetimepicker"
     ]
   }
 }

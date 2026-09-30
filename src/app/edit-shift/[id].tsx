@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useStore } from '../../lib/store';
-import { Avatar, Button, Card, Screen, Section } from '../../ui/components';
+import { Avatar, Button, Card, Screen, Section, SelectionMark } from '../../ui/components';
 import { Field } from '../../ui/Field';
 import { ShiftDateTimeFields } from '../../ui/ShiftDateTimeFields';
 import { C } from '../../ui/theme';
@@ -45,7 +45,7 @@ function ShiftEditor({ shift }: { shift: Shift }) {
     <ShiftDateTimeFields date={date} onDateChange={setDate} start={start} onStartChange={setStart} end={end} onEndChange={setEnd} dateLocked={locked} />
     {locked && <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18 }}>Clock records exist for this shift, so its date and assigned crew are locked.</Text>}
     <Section title="Assigned workers" />
-    <Card style={{ padding: 0, overflow: 'hidden', marginBottom: 20 }}>{available.map((w, i) => <Pressable key={w.id} disabled={locked} accessibilityRole="checkbox" accessibilityState={{ checked: selected.includes(w.id), disabled: locked }} onPress={() => toggle(w.id)} style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderTopWidth: i ? 1 : 0, borderColor: C.line, opacity: locked ? .65 : 1 }}><Avatar worker={w} size={36} /><View style={{ flex: 1, marginLeft: 11 }}><Text style={{ color: C.ink, fontWeight: '700', fontSize: 13 }}>{w.name}</Text><Text style={{ color: C.muted, fontSize: 11 }}>{w.role} · {w.team}</Text></View><View style={{ width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: C.green, backgroundColor: selected.includes(w.id) ? C.green : 'transparent' }} /></Pressable>)}</Card>
+    <Card style={{ padding: 0, overflow: 'hidden', marginBottom: 20 }}>{available.map((w, i) => <Pressable key={w.id} disabled={locked} accessibilityRole="checkbox" accessibilityState={{ checked: selected.includes(w.id), disabled: locked }} onPress={() => toggle(w.id)} style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderTopWidth: i ? 1 : 0, borderColor: C.line, opacity: locked ? .65 : 1 }}><Avatar worker={w} size={36} /><View style={{ flex: 1, marginLeft: 11 }}><Text style={{ color: C.ink, fontWeight: '700', fontSize: 13 }}>{w.name}</Text><Text style={{ color: C.muted, fontSize: 11 }}>{w.role} · {w.team}</Text></View><SelectionMark selected={selected.includes(w.id)} /></Pressable>)}</Card>
     {!!message && <Text style={{ color: C.red, marginBottom: 12 }}>{message}</Text>}
     <Button label="Save changes" onPress={save} />
   </Screen>;

@@ -105,7 +105,7 @@ export function AuthScreen() {
 
   return <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <Animated.View pointerEvents="none" style={[s.decoration, { transform: [{ translateY: haloMotion.interpolate({ inputRange: [0, 1], outputRange: [0, 16] }) }, { scale: haloMotion.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] }) }] }]} />
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+    <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
       <View style={s.shell}>
         <Animated.View style={[s.brandRow, { opacity: introMotion, transform: [{ translateY: introMotion.interpolate({ inputRange: [0, 1], outputRange: [13, 0] }) }] }]}>
           <Text style={s.brand}>tempo<Text style={{ color: '#69A889' }}>.</Text></Text>
