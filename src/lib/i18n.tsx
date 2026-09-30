@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import generatedTranslations from './translations.generated.json';
 import { brandTranslations } from './brand-translations';
+import { reviewedTranslations } from './reviewed-translations';
 
 export type Language = 'en-US' | 'mk-MK' | 'sq-AL';
 export const LANGUAGES: { code: Language; label: string; short: string }[] = [
@@ -231,7 +232,7 @@ export function translateUi(english: string, language: Language = activeLanguage
   if (!match) return english;
   const [, before, key, after] = match;
   const generated = generatedTranslations[language] as Record<string, string>;
-  return before + (brandTranslations[key]?.[language === 'mk-MK' ? 0 : 1] ?? translations[language][key] ?? generated[key] ?? translateDynamic(key, language)) + after;
+  return before + (reviewedTranslations[key]?.[language === 'mk-MK' ? 0 : 1] ?? brandTranslations[key]?.[language === 'mk-MK' ? 0 : 1] ?? translations[language][key] ?? generated[key] ?? translateDynamic(key, language)) + after;
 }
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
