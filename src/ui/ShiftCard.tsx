@@ -7,9 +7,10 @@ import { Text } from './LocalizedText';
 import { durationMinutes, formatDay, hoursLabel, Shift } from '../lib/data';
 import { useStore } from '../lib/store';
 import { Card } from './components';
-import { C } from './theme';
+import { useTheme } from './theme';
 
 export function ShiftCard({ shift, compact = false, history = false }: { shift: Shift; compact?: boolean; history?: boolean }) {
+  const C = useTheme().colors;
   const { workers, punches } = useStore();
   const checkedIn = [...new Set(punches.filter(p => p.shiftId === shift.id && p.type === 'in').map(p => p.workerId))].length;
   const recordedMinutes = [...new Set(punches.filter(p => p.shiftId === shift.id).map(p => p.workerId))].reduce((total, workerId) => total + durationMinutes(punches, shift.id, workerId), 0);

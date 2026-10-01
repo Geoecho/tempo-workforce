@@ -9,9 +9,10 @@ import { callWorker } from '../lib/phone';
 import { useStore } from '../lib/store';
 import { useLanguage } from '../lib/i18n';
 import { Avatar, Card, Screen } from '../ui/components';
-import { C } from '../ui/theme';
+import { useTheme } from '../ui/theme';
 
 export default function Team() {
+  const C = useTheme().colors;
   const { t } = useLanguage();
   const { workers, shifts, role, currency, teams: savedTeams, addTeam } = useStore();
   const [query, setQuery] = useState('');
@@ -40,24 +41,24 @@ export default function Team() {
   return <Screen title="People & teams" subtitle="Organize your crew and reach them quickly.">
     <View style={{ backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 13, minHeight: 46, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
       <Search size={17} color={C.muted} />
-      <TextInput accessibilityLabel={t('Search people or teams')} value={query} onChangeText={setQuery} placeholder={t('Search people or teams')} placeholderTextColor="#A0AAA3" style={{ flex: 1, color: C.ink, fontSize: 13 }} />
+      <TextInput accessibilityLabel={t('Search people or teams')} value={query} onChangeText={setQuery} placeholder={t('Search people or teams')} placeholderTextColor={C.placeholder} style={{ flex: 1, color: C.ink, fontSize: 13 }} />
     </View>
     <View style={{ flexDirection: 'row', gap: 9, marginBottom: 18 }}>
       <Pressable accessibilityRole="button" onPress={() => { setCreating(true); setError(''); }} style={{ flex: 1, minHeight: 45, borderRadius: 12, borderWidth: 1, borderColor: C.green, backgroundColor: C.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
         <Plus size={17} color={C.green} /><Text style={{ color: C.green, fontWeight: '500' }}>{t('Add team')}</Text>
       </Pressable>
       <Pressable accessibilityRole="button" onPress={() => router.push('/new-worker')} style={{ flex: 1, minHeight: 45, borderRadius: 12, backgroundColor: C.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
-        <Plus size={17} color="#fff" /><Text style={{ color: '#fff', fontWeight: '500' }}>{t('Add person')}</Text>
+        <Plus size={17} color={C.onGreen} /><Text style={{ color: C.onGreen, fontWeight: '500' }}>{t('Add person')}</Text>
       </Pressable>
     </View>
     {creating && <Card style={{ marginBottom: 18 }}>
       <Text style={{ color: C.ink, fontWeight: '500', fontSize: 16, marginBottom: 5 }}>{t('New team')}</Text>
       <Text style={{ color: C.muted, fontSize: 12, marginBottom: 12 }}>{t('Create the team now, then add people to it.')}</Text>
-      <TextInput accessibilityLabel="Team name" autoCapitalize="words" autoFocus value={newTeam} onChangeText={setNewTeam} onSubmitEditing={saveTeam} placeholder="e.g. Logistics" placeholderTextColor="#A0AAA3" style={{ borderWidth: 1, borderColor: C.line, borderRadius: 11, padding: 12, color: C.ink, backgroundColor: C.surface, fontSize: 15 }} />
+      <TextInput accessibilityLabel="Team name" autoCapitalize="words" autoFocus value={newTeam} onChangeText={setNewTeam} onSubmitEditing={saveTeam} placeholder="e.g. Logistics" placeholderTextColor={C.placeholder} style={{ borderWidth: 1, borderColor: C.line, borderRadius: 11, padding: 12, color: C.ink, backgroundColor: C.surface, fontSize: 15 }} />
       {!!error && <Text style={{ color: C.red, fontSize: 12, marginTop: 9 }}>{error}</Text>}
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 18, marginTop: 16 }}>
         <Pressable onPress={() => { setCreating(false); setNewTeam(''); setError(''); }} style={{ padding: 8 }}><Text style={{ color: C.muted, fontWeight: '500' }}>{t('Cancel')}</Text></Pressable>
-        <Pressable onPress={saveTeam} style={{ backgroundColor: C.green, borderRadius: 10, paddingHorizontal: 17, paddingVertical: 9 }}><Text style={{ color: '#fff', fontWeight: '500' }}>{t('Create team')}</Text></Pressable>
+        <Pressable onPress={saveTeam} style={{ backgroundColor: C.green, borderRadius: 10, paddingHorizontal: 17, paddingVertical: 9 }}><Text style={{ color: C.onGreen, fontWeight: '500' }}>{t('Create team')}</Text></Pressable>
       </View>
     </Card>}
     <Card style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
@@ -78,6 +79,7 @@ export default function Team() {
 }
 
 function WorkerRow({ worker, shifts, currency, first }: { worker: Worker; shifts: number; currency: Currency; first: boolean }) {
+  const C = useTheme().colors;
   return <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderTopWidth: first ? 0 : 1, borderTopColor: C.line }}>
     <Pressable onPress={() => router.push({ pathname: '/worker/[id]', params: { id: worker.id } })} style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}><Avatar worker={worker} size={40} /><View style={{ marginLeft: 12, flex: 1 }}><Text style={{ color: C.ink, fontWeight: '500', fontSize: 14 }}>{worker.name}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{worker.role} · {shifts} shifts</Text><Text style={{ color: C.green, fontSize: 11, fontWeight: '500', marginTop: 3 }}>{formatMoney(Math.round(worker.hourlyRate * 100), currency)}/h</Text></View></Pressable>
     {worker.phone && <Pressable accessibilityLabel={`Call ${worker.name}`} onPress={() => callWorker(worker.phone)} style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: C.mint, alignItems: 'center', justifyContent: 'center', marginRight: 5 }}><Phone size={17} color={C.green} /></Pressable>}

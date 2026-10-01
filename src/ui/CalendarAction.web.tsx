@@ -6,9 +6,10 @@ import { Text } from './LocalizedText';
 import { addShiftToCalendar, CalendarProvider } from '../lib/calendar';
 import type { Shift } from '../lib/data';
 import { Button, Card } from './components';
-import { C } from './theme';
+import { useTheme } from './theme';
 
 export function CalendarAction({ shift }: { shift: Shift }) {
+  const C = useTheme().colors;
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
   const select = (provider: CalendarProvider) => {

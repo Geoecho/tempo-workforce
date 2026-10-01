@@ -10,10 +10,11 @@ import { useFeedback } from '../lib/feedback';
 import { useStore } from '../lib/store';
 import { useLanguage } from '../lib/i18n';
 import { Button, Card, Screen, Section } from '../ui/components';
-import { C } from '../ui/theme';
+import { useTheme } from '../ui/theme';
 
 type ScanResult = { ok: boolean; message: string; type?: 'in' | 'out'; pay?: PaySummary };
 export default function Scan() {
+  const C = useTheme().colors;
   const { t } = useLanguage();
   const { play } = useFeedback();
   const { role, shifts, punches, selectedWorkerId, scan, currency, online } = useStore();
@@ -41,7 +42,7 @@ export default function Scan() {
   return <Screen title="Scan site code" subtitle="Scan the live QR code shown by your site lead.">
     <Card style={{ backgroundColor: current ? C.mint : C.surface, marginBottom: 16, padding: 16 }}><Text style={{ color: C.muted, fontSize: 11, fontWeight: '500', letterSpacing: .7 }}>YOUR STATUS</Text><Text style={{ color: C.ink, fontSize: 19, fontWeight: '500', marginTop: 5 }}>{nextAction}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>{current ? `You’re active at ${current.site}. Scan that shift’s code when you leave.` : assigned.length ? `You have ${assigned.length} shift${assigned.length === 1 ? '' : 's'} today. Scan your shift’s code when you arrive.` : 'No shift is assigned today. Ask your site lead if this is unexpected.'}</Text></Card>
     {result ? <Card style={{ alignItems: 'center', paddingVertical: 30 }}>
-      <View style={{ width: 64, height: 64, borderRadius: 22, backgroundColor: result.ok ? C.mint : '#F8E8E4', alignItems: 'center', justifyContent: 'center' }}>{result.ok ? <CheckCircle2 color={C.green} size={32} /> : <XCircle color={C.red} size={32} />}</View>
+      <View style={{ width: 64, height: 64, borderRadius: 22, backgroundColor: result.ok ? C.mint : C.dangerSurface, alignItems: 'center', justifyContent: 'center' }}>{result.ok ? <CheckCircle2 color={C.green} size={32} /> : <XCircle color={C.red} size={32} />}</View>
       <Text style={{ color: C.ink, fontSize: 20, fontWeight: '500', marginTop: 17 }}>{t(result.ok ? result.type === 'out' ? 'Shift complete' : 'You’re checked in' : 'Could not scan')}</Text>
       <Text style={{ color: C.muted, fontSize: 13, textAlign: 'center', marginTop: 8, lineHeight: 19 }}>{result.message}</Text>
       {result.ok && <Text style={{ color: C.muted, fontSize: 11, textAlign: 'center', marginTop: 9 }}>A 45-second pause protects against accidental double scans.</Text>}

@@ -71,3 +71,5 @@ Vercel deploys the connected Git repository to the production web URL. For local
 
 See [brand/README.md](brand/README.md) for Tempo's visual identity.
 See [docs/SHIP_READINESS.md](docs/SHIP_READINESS.md) for the release, privacy, and security review.
+
+In **More → Appearance**, choose System, Light, or Dark. The preference is saved on this device; it does not change the rest of the workspace.

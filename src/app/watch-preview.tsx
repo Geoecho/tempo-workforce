@@ -9,12 +9,13 @@ import { formatDay, today } from '../lib/data';
 import { useFeedback } from '../lib/feedback';
 import { useStore } from '../lib/store';
 import { Card, Screen, Section } from '../ui/components';
-import { C } from '../ui/theme';
+import { useTheme } from '../ui/theme';
 
 type WatchState = 'upcoming' | 'active' | 'complete';
 const accent = '#D5E2CB';
 
 export default function WatchPreview() {
+  const C = useTheme().colors;
   const { selectedWorkerId, workers, shifts } = useStore();
   const { play } = useFeedback();
   const [state, setState] = useState<WatchState>('upcoming');

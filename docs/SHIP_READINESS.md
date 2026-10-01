@@ -9,6 +9,7 @@ This is a working release checklist, not a certification or a legal opinion. Tem
 - Teams, worker profiles, profile photos, single and repeating shifts, monthly grouping of repeating shifts, site pins, directions, and calendar actions.
 - Short-lived server-issued site QR codes, worker phone scanning, check-in/out history, paid breaks, and estimated time and pay exports.
 - Local shift reminders, haptics and sounds where supported, and an Apple Watch companion source and preview. The physical Watch build remains unverified.
+- System, Light, and Dark appearance modes saved per device. Native tab icons now use the Lucide Animated artwork and motion patterns, but the physical iOS animation still needs a device check.
 
 ## Site display design
 
@@ -31,7 +32,15 @@ This is a working release checklist, not a certification or a legal opinion. Tem
 | P1 | Define backup/restore, incident response, access review, admin MFA, and rate limits for authentication and high-volume operations. | Workforce and pay records need operational controls beyond app UI. |
 | P1 | Test iOS and Android signed builds on real devices, including scanner, notification permission, background/foreground recovery, weak network, keyboard, localization, and accessibility. | A working web or Expo Go preview does not verify store builds. |
 | P1 | Add the Apple signing Team ID when available and build the Watch companion from a Mac with a paired device. | The current Expo config warns that `ios.appleTeamId` is missing; the physical Watch build has not been verified. |
-| P2 | Add a proper light/dark token system and Settings switch, then check every screen and contrast level in both modes. | Existing screens use a shared light palette plus many literal colors; a superficial switch would leave unreadable views. |
+| P1 | Check Light, Dark, and System appearance on physical iPhone and Android devices, including the keyboard, date picker, QR display, and reduced motion setting. | Web previews and bundle exports cannot prove native rendering or animation timing. |
+
+## Product improvements after the launch blockers
+
+1. Add reusable **Sites** with saved entrance, map pin, and display-device assignment. A shift would select a saved site, so admins do not repeatedly type the same location.
+2. Give a recurring series its own detail page with **edit future days**, **pause**, and **end series** actions. The current monthly grouping organizes the list, while each dated shift is still edited separately.
+3. Add a calendar view and filters for site, team, worker, and status. Keep the grouped list as the quick overview.
+4. Add a dedicated arrival board for each site, including expected, on site, on break, and checked out counts. The shift page already shows individual status.
+5. Audit contrast and touch targets in both themes with real users, especially small labels, QR displays in bright light, and the worker scanning path.
 
 ## Privacy-policy facts to decide
 

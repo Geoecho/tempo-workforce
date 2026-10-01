@@ -6,11 +6,12 @@ import { Pressable } from './LocalizedPressable';
 import { Text } from './LocalizedText';
 import { useFeedback } from '../lib/feedback';
 import { Button, Card, Section } from './components';
-import { C } from './theme';
+import { useTheme } from './theme';
 
 function SettingRow({ icon, title, detail, value, onChange, disabled = false }: {
   icon: React.ReactNode; title: string; detail: string; value: boolean; onChange: (value: boolean) => void; disabled?: boolean;
 }) {
+  const C = useTheme().colors;
   return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 }}>
     <View style={{ width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: C.mint }}>{icon}</View>
     <View style={{ flex: 1 }}><Text style={{ color: C.ink, fontSize: 13, fontWeight: '500' }}>{title}</Text><Text style={{ color: C.muted, fontSize: 11, lineHeight: 16, marginTop: 3 }}>{detail}</Text></View>
@@ -19,6 +20,7 @@ function SettingRow({ icon, title, detail, value, onChange, disabled = false }: 
 }
 
 export function FeedbackControls({ worker }: { worker: boolean }) {
+  const C = useTheme().colors;
   const { haptics, sounds, reminders, setHaptics, setSounds, setReminders, play } = useFeedback();
   const [message, setMessage] = useState('');
   return <>

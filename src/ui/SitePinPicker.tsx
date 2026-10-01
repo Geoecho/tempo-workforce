@@ -5,9 +5,10 @@ import { View } from 'react-native';
 import { Pressable } from './LocalizedPressable';
 import { Text, TextInput } from './LocalizedText';
 import { openSiteMap, parseSitePin, SitePin } from '../lib/site-location';
-import { C } from './theme';
+import { useTheme } from './theme';
 
 export function SitePinPicker({ pin, onChange, site, location }: { pin: SitePin | null; onChange: (pin: SitePin | null) => void; site: string; location: string }) {
+  const C = useTheme().colors;
   const [entry, setEntry] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -33,7 +34,7 @@ export function SitePinPicker({ pin, onChange, site, location }: { pin: SitePin 
   return <View style={{ marginBottom: 21 }}>
     <Text style={{ color: C.ink, fontWeight: '500', fontSize: 13, marginBottom: 7 }}>Site pin</Text>
     <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, marginBottom: 10 }}>Optional. Set the entrance or meeting point precisely so workers can open directions.</Text>
-    <TextInput accessibilityLabel="Site pin coordinates or Maps link" value={entry} onChangeText={setEntry} onSubmitEditing={setFromEntry} placeholder="Coordinates or Maps link" placeholderTextColor="#9DA9A2" autoCapitalize="none" autoCorrect={false} style={{ minHeight: 46, borderRadius: 11, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 13, color: C.ink }} />
+    <TextInput accessibilityLabel="Site pin coordinates or Maps link" value={entry} onChangeText={setEntry} onSubmitEditing={setFromEntry} placeholder="Coordinates or Maps link" placeholderTextColor={C.placeholder} autoCapitalize="none" autoCorrect={false} style={{ minHeight: 46, borderRadius: 11, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 13, color: C.ink }} />
     <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginTop: 9 }}>
       <Pressable accessibilityRole="button" onPress={setFromEntry} style={{ paddingVertical: 8, paddingRight: 8 }}><Text style={{ color: C.green, fontWeight: '500', fontSize: 12 }}>Set pin</Text></Pressable>
       <Pressable accessibilityRole="button" disabled={busy} onPress={() => void setFromDevicePosition()} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 8 }}><Navigation2 size={14} color={C.green} /><Text style={{ color: C.green, fontWeight: '500', fontSize: 12 }}>{busy ? 'Finding position…' : 'Use my position'}</Text></Pressable>

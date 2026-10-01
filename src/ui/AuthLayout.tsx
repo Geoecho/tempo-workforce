@@ -1,15 +1,17 @@
 import { router } from 'expo-router';
 import { ArrowUpRight } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Animated, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BrandLogo, BrandMark } from './Brand';
 import { LanguagePicker } from './LanguagePicker';
 import { Pressable } from './LocalizedPressable';
 import { Text } from './LocalizedText';
-import { C } from './theme';
+import { ThemeColors, useTheme } from './theme';
 
 export function AuthLayout({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
+  const C = useTheme().colors;
+  const s = useMemo(() => makeLayoutStyles(C), [C]);
   const { width } = useWindowDimensions();
   const desktop = width >= 960;
   const [motion] = useState(() => new Animated.Value(0));
@@ -39,18 +41,20 @@ export function AuthLayout({ title, description, children }: { title: string; de
   </KeyboardAvoidingView></SafeAreaView>;
 }
 
-const s = StyleSheet.create({
+function makeLayoutStyles(C: ThemeColors) { return StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg }, header: { height: 83, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', zIndex: 100 },
   story: { width: '46%', marginLeft: 20, marginBottom: 20, backgroundColor: '#18392C', borderRadius: 16, overflow: 'hidden', padding: 50, justifyContent: 'center', minHeight: 520 },
   storyEyebrow: { color: '#B5C6AA', fontSize: 12 }, storyTitle: { color: '#F5F8EF', fontSize: 67, lineHeight: 72, fontWeight: '400', letterSpacing: -3.5 }, storyCopy: { color: '#A9BD9E', fontSize: 17, lineHeight: 27, maxWidth: 260, marginTop: 27 },
   storyLink: { position: 'absolute', bottom: 38, left: 50, flexDirection: 'row', alignItems: 'center', gap: 14 }, scroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 25 }, form: { width: '100%', maxWidth: 385, alignSelf: 'center' },
   title: { color: C.ink, fontSize: 34, fontWeight: '400', letterSpacing: -1.3, lineHeight: 40 }, description: { color: C.muted, fontSize: 14, lineHeight: 22, marginTop: 12, marginBottom: 31 },
-});
+}); }
 
-export const authStyles = StyleSheet.create({
+function makeAuthStyles(C: ThemeColors) { return StyleSheet.create({
   label: { color: C.ink, fontSize: 12, fontWeight: '500', marginBottom: 9 },
-  input: { minHeight: 51, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 14, fontSize: 15, color: C.ink, marginBottom: 20 }, focused: { borderColor: '#7F9C70', backgroundColor: '#FFFFFF' },
+  input: { minHeight: 51, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 14, fontSize: 15, color: C.ink, marginBottom: 20 }, focused: { borderColor: C.green, backgroundColor: C.field },
   password: { minHeight: 51, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, flexDirection: 'row', alignItems: 'center', marginBottom: 15 }, passwordInput: { flex: 1, minHeight: 49, paddingHorizontal: 14, fontSize: 15, color: C.ink }, eye: { width: 46, minHeight: 49, alignItems: 'center', justifyContent: 'center' },
-  submit: { minHeight: 51, borderRadius: 8, backgroundColor: C.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 15 }, submitText: { color: '#FFFFFF', fontSize: 14, fontWeight: '500' },
+  submit: { minHeight: 51, borderRadius: 8, backgroundColor: C.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 15 }, submitText: { color: C.onGreen, fontSize: 14, fontWeight: '500' },
   error: { color: C.red, fontSize: 12, lineHeight: 19, marginBottom: 16 }, success: { color: C.green, fontSize: 13, lineHeight: 20, marginBottom: 16, backgroundColor: C.mint, borderRadius: 8, padding: 13 }, hint: { color: C.muted, fontSize: 12, lineHeight: 19, marginBottom: 20 }, back: { alignSelf: 'center', paddingVertical: 20, paddingHorizontal: 12 }, backText: { color: C.green, fontSize: 13 },
-});
+}); }
+
+export function useAuthStyles() { const C = useTheme().colors; return useMemo(() => makeAuthStyles(C), [C]); }

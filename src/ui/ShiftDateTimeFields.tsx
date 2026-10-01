@@ -6,7 +6,7 @@ import { Pressable } from './LocalizedPressable';
 import { Text } from './LocalizedText';
 import { localDate } from '../lib/data';
 import { useLanguage } from '../lib/i18n';
-import { C } from './theme';
+import { useTheme } from './theme';
 
 type Props = {
   date: string; onDateChange: (value: string) => void;
@@ -31,6 +31,7 @@ const clockValue = (value: string) => {
 };
 
 export function ShiftDateTimeFields({ date, onDateChange, start, onStartChange, end, onEndChange, dateLocked = false, until, onUntilChange }: Props) {
+  const { colors: C, scheme } = useTheme();
   const { language } = useLanguage();
   const [openKey, setOpenKey] = useState<PickerKey | null>(null);
   const [draft, setDraft] = useState(new Date());
@@ -83,7 +84,7 @@ export function ShiftDateTimeFields({ date, onDateChange, start, onStartChange, 
             <Text style={{ color: C.ink, fontSize: 16, fontWeight: '500' }}>{openKey === 'date' ? 'Choose a date' : openKey === 'until' ? 'Repeat until' : openKey === 'start' ? 'Start time' : 'End time'}</Text>
             <Pressable accessibilityRole="button" onPress={commit}><Text style={{ color: C.green, fontSize: 16, fontWeight: '500' }}>Done</Text></Pressable>
           </View>
-          {openKey && <DateTimePicker value={draft} mode={openKey === 'date' || openKey === 'until' ? 'date' : 'time'} display={openKey === 'date' || openKey === 'until' ? 'inline' : 'spinner'} themeVariant="light" onValueChange={(_event, selected) => { if (selected) setDraft(selected); }} style={{ alignSelf: 'center', width: '100%', height: openKey === 'date' || openKey === 'until' ? 320 : 190 }} />}
+          {openKey && <DateTimePicker value={draft} mode={openKey === 'date' || openKey === 'until' ? 'date' : 'time'} display={openKey === 'date' || openKey === 'until' ? 'inline' : 'spinner'} themeVariant={scheme} onValueChange={(_event, selected) => { if (selected) setDraft(selected); }} style={{ alignSelf: 'center', width: '100%', height: openKey === 'date' || openKey === 'until' ? 320 : 190 }} />}
         </View>
       </View>
     </Modal>

@@ -11,9 +11,10 @@ import { useStore } from '../../lib/store';
 import { chooseProfilePhoto } from '../../lib/profile-photo';
 import { Avatar, Button, Card, Screen, Section } from '../../ui/components';
 import { Field } from '../../ui/Field';
-import { C } from '../../ui/theme';
+import { useTheme } from '../../ui/theme';
 
 export default function WorkerDetail() {
+  const C = useTheme().colors;
   const { id } = useLocalSearchParams<{ id: string }>();
   const { workers, ready, role } = useStore();
   const worker = workers.find(w => w.id === id);
@@ -23,6 +24,7 @@ export default function WorkerDetail() {
 }
 
 function WorkerEditor({ worker }: { worker: Worker }) {
+  const C = useTheme().colors;
   const { updateWorker, removeWorker, currency, punches, shifts } = useStore();
   const [name, setName] = useState(worker.name);
   const [job, setJob] = useState(worker.role);
@@ -64,9 +66,9 @@ function WorkerEditor({ worker }: { worker: Worker }) {
     confirmRemoval('Remove worker?', hasHistory ? 'This worker will leave the active team. Past time and pay records remain available.' : 'This worker will be removed from the team and future assignments.', () => { removeWorker(worker.id); router.replace('/team'); });
   };
   return <Screen back noNav title="Worker profile" subtitle="Live status, work history, and contact details">
-    <Card style={{ flexDirection: 'row', alignItems: 'center' }}><Avatar worker={worker} size={51} /><View style={{ flex: 1, marginLeft: 13 }}><Text style={{ color: C.ink, fontSize: 17, fontWeight: '500' }}>{worker.name}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{worker.role} · {worker.team}</Text></View><View style={{ backgroundColor: onSite ? C.mint : '#F1F2F0', paddingHorizontal: 9, paddingVertical: 6, borderRadius: 16 }}><Text style={{ color: onSite ? C.green : C.muted, fontSize: 11, fontWeight: '500' }}>{onSite ? 'Active now' : 'Off the clock'}</Text></View></Card>
+    <Card style={{ flexDirection: 'row', alignItems: 'center' }}><Avatar worker={worker} size={51} /><View style={{ flex: 1, marginLeft: 13 }}><Text style={{ color: C.ink, fontSize: 17, fontWeight: '500' }}>{worker.name}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{worker.role} · {worker.team}</Text></View><View style={{ backgroundColor: onSite ? C.mint : C.subtle, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 16 }}><Text style={{ color: onSite ? C.green : C.muted, fontSize: 11, fontWeight: '500' }}>{onSite ? 'Active now' : 'Off the clock'}</Text></View></Card>
     {missingCheckout && <Text style={{ color: C.red, fontSize: 12, marginTop: 10 }}>A past shift is missing a check-out.</Text>}
-    {activePunch && <Card style={{ marginTop: 12, backgroundColor: C.mint, borderColor: '#D4E9DA' }}><Text style={{ color: C.green, fontSize: 12, fontWeight: '500' }}>CURRENTLY CHECKED IN</Text><Text style={{ color: C.ink, fontSize: 16, fontWeight: '500', marginTop: 5 }}>{activeShift?.title ?? 'Active shift'}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>{activeShift?.site ? `${activeShift.site} · ` : ''}Since {formatTime(activePunch.at)}</Text></Card>}
+    {activePunch && <Card style={{ marginTop: 12, backgroundColor: C.mint, borderColor: C.line }}><Text style={{ color: C.green, fontSize: 12, fontWeight: '500' }}>CURRENTLY CHECKED IN</Text><Text style={{ color: C.ink, fontSize: 16, fontWeight: '500', marginTop: 5 }}>{activeShift?.title ?? 'Active shift'}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>{activeShift?.site ? `${activeShift.site} · ` : ''}Since {formatTime(activePunch.at)}</Text></Card>}
     <Section title="At a glance" />
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
       {[

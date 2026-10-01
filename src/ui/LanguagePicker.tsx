@@ -4,9 +4,10 @@ import { View } from 'react-native';
 import { LANGUAGES, useLanguage } from '../lib/i18n';
 import { Pressable } from './LocalizedPressable';
 import { Text } from './LocalizedText';
-import { C } from './theme';
+import { useTheme } from './theme';
 
 export function LanguagePicker() {
+  const C = useTheme().colors;
   const { language, setLanguage } = useLanguage();
   const [open, setOpen] = useState(false);
   return <View style={{ zIndex: 100 }}><Pressable accessibilityRole="button" accessibilityLabel="Choose language" accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)} style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 5 }}><Globe2 size={16} color={C.green} /><Text style={{ color: C.green, fontSize: 11 }}>{LANGUAGES.find(item => item.code === language)?.short}</Text><ChevronDown size={12} color={C.muted} /></Pressable>

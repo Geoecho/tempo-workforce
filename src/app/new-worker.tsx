@@ -6,11 +6,12 @@ import { Text } from '../ui/LocalizedText';
 import { useStore } from '../lib/store';
 import { Avatar, Button, Screen } from '../ui/components';
 import { Field } from '../ui/Field';
-import { C } from '../ui/theme';
+import { useTheme } from '../ui/theme';
 import { teamNames } from '../lib/data';
 import { chooseProfilePhoto } from '../lib/profile-photo';
 
 export default function NewWorker() {
+  const C = useTheme().colors;
   const { team: suggestedTeam } = useLocalSearchParams<{ team?: string }>();
   const { addWorker, role, workers, teams: savedTeams, currency } = useStore();
   const teams = teamNames({ teams: savedTeams, workers });
@@ -37,7 +38,7 @@ export default function NewWorker() {
     <Field label="Phone" value={phone} onChangeText={setPhone} placeholder="Include country code" keyboardType="phone-pad" />
     <Field label={`Hourly rate (${currency})`} value={rate} onChangeText={setRate} placeholder="e.g. 40.00" keyboardType="decimal-pad" />
     <Text style={{ color: C.ink, fontWeight: '500', fontSize: 13, marginBottom: 9 }}>Team</Text>
-    <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 27 }}>{teams.map(t => <Pressable key={t} onPress={() => setTeam(t)} style={{ borderRadius: 20, paddingHorizontal: 15, paddingVertical: 10, backgroundColor: team === t ? C.green : C.surface, borderWidth: 1, borderColor: team === t ? C.green : C.line }}><Text style={{ color: team === t ? '#fff' : C.muted, fontSize: 13, fontWeight: '500' }}>{t}</Text></Pressable>)}</View>
+    <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 27 }}>{teams.map(t => <Pressable key={t} onPress={() => setTeam(t)} style={{ borderRadius: 20, paddingHorizontal: 15, paddingVertical: 10, backgroundColor: team === t ? C.green : C.surface, borderWidth: 1, borderColor: team === t ? C.green : C.line }}><Text style={{ color: team === t ? C.onGreen : C.muted, fontSize: 13, fontWeight: '500' }}>{t}</Text></Pressable>)}</View>
     {!!error && <Text style={{ color: C.red, marginBottom: 13 }}>{error}</Text>}
     <Button label="Add team member" onPress={save} />
   </Screen>;

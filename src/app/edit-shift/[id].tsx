@@ -10,10 +10,11 @@ import { Field } from '../../ui/Field';
 import { ShiftDateTimeFields } from '../../ui/ShiftDateTimeFields';
 import { SitePinPicker } from '../../ui/SitePinPicker';
 import type { SitePin } from '../../lib/site-location';
-import { C } from '../../ui/theme';
+import { useTheme } from '../../ui/theme';
 import { localDate, Shift } from '../../lib/data';
 
 export default function EditShift() {
+  const C = useTheme().colors;
   const { id } = useLocalSearchParams<{ id: string }>();
   const { shifts, role, ready } = useStore();
   const shift = shifts.find(s => s.id === id && !s.archived);
@@ -23,6 +24,7 @@ export default function EditShift() {
 }
 
 function ShiftEditor({ shift }: { shift: Shift }) {
+  const C = useTheme().colors;
   const { play } = useFeedback();
   const { workers, punches, updateShift } = useStore();
   const locked = punches.some(p => p.shiftId === shift.id);

@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { Pressable } from './LocalizedPressable';
 import { Text } from './LocalizedText';
 import { localDate, today } from '../lib/data';
-import { C } from './theme';
+import { useTheme } from './theme';
 
 type Props = {
   date: string; onDateChange: (value: string) => void;
@@ -13,14 +13,14 @@ type Props = {
   until?: string; onUntilChange?: (value: string) => void;
 };
 
-const inputStyle: React.CSSProperties = {
-  width: '100%', minWidth: 0, height: 50, boxSizing: 'border-box', borderRadius: 12,
-  border: `1px solid ${C.line}`, background: '#FBFCFA', color: C.ink,
-  padding: '0 14px', font: '600 15px system-ui, sans-serif', colorScheme: 'light',
-  cursor: 'pointer', outlineColor: C.green,
-};
-
 export function ShiftDateTimeFields({ date, onDateChange, start, onStartChange, end, onEndChange, dateLocked = false, until, onUntilChange }: Props) {
+  const { colors: C, scheme } = useTheme();
+  const inputStyle: React.CSSProperties = {
+    width: '100%', minWidth: 0, height: 50, boxSizing: 'border-box', borderRadius: 12,
+    border: `1px solid ${C.line}`, background: C.field, color: C.ink,
+    padding: '0 14px', font: '600 15px system-ui, sans-serif', colorScheme: scheme,
+    cursor: 'pointer', outlineColor: C.green,
+  };
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   return <View style={{ marginBottom: 18 }}>
@@ -28,7 +28,7 @@ export function ShiftDateTimeFields({ date, onDateChange, start, onStartChange, 
     <input aria-label="Shift date" type="date" value={date} disabled={dateLocked} onChange={event => onDateChange(event.currentTarget.value)} style={{ ...inputStyle, opacity: dateLocked ? .55 : 1 }} />
     {!dateLocked && <View style={{ flexDirection: 'row', gap: 8, marginTop: 9, marginBottom: 18 }}>
       {([{ label: 'Today', value: today() }, { label: 'Tomorrow', value: localDate(tomorrow) }]).map(option =>
-        <Pressable key={option.label} accessibilityRole="button" onPress={() => onDateChange(option.value)} style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, backgroundColor: date === option.value ? C.mint : C.surface, borderWidth: 1, borderColor: date === option.value ? '#BBDCCB' : C.line }}>
+        <Pressable key={option.label} accessibilityRole="button" onPress={() => onDateChange(option.value)} style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, backgroundColor: date === option.value ? C.mint : C.surface, borderWidth: 1, borderColor: date === option.value ? C.green : C.line }}>
           <Text style={{ color: C.green, fontSize: 12, fontWeight: '500' }}>{option.label}</Text>
         </Pressable>
       )}

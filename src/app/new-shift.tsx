@@ -11,7 +11,7 @@ import { Field } from '../ui/Field';
 import { ShiftDateTimeFields } from '../ui/ShiftDateTimeFields';
 import { SitePinPicker } from '../ui/SitePinPicker';
 import type { SitePin } from '../lib/site-location';
-import { C } from '../ui/theme';
+import { useTheme } from '../ui/theme';
 
 const defaultRepeatUntil = (value: string) => {
   const start = new Date(`${value}T12:00:00`);
@@ -25,6 +25,7 @@ const defaultRepeatUntil = (value: string) => {
 };
 
 export default function NewShift() {
+  const C = useTheme().colors;
   const { play } = useFeedback();
   const { addShifts, workers, role } = useStore();
   const [title, setTitle] = useState('');

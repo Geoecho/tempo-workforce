@@ -5,7 +5,7 @@ import { Text } from '../ui/LocalizedText';
 import { AuthScreen } from '../ui/AuthScreen';
 import { PasswordRecovery } from '../ui/PasswordRecovery';
 import { WorkspaceSetup } from '../ui/WorkspaceSetup';
-import { C } from '../ui/theme';
+import { useTheme } from '../ui/theme';
 import { BreakEvent, Currency, initialState, newWorkspaceState, paySummary, Punch, Shift, ShiftNotification, State, TimeApproval, teamNames, today, uid, Worker } from './data';
 import { Context, Result } from './store-context';
 import { recoveryRedirect, supabase } from './supabase';
@@ -14,6 +14,7 @@ type Snapshot = { workspaceId: string; version: number; state: State; notificati
 const client = supabase!;
 
 export function OnlineStoreProvider({ children }: { children: React.ReactNode }) {
+  const C = useTheme().colors;
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [state, setState] = useState<State>(initialState);

@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "scheme": "tempo",
     "icon": "./assets/tempo-icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.netaville.tempo.workforce"
@@ -79,7 +79,8 @@
           "resizeMode": "contain"
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-system-ui"
     ],
     "extra": {
       "router": {},

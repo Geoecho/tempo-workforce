@@ -1,6 +1,6 @@
 import { router, usePathname } from 'expo-router';
 import { Check, ChevronLeft } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Animated, Image, Keyboard, Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Pressable } from './LocalizedPressable';
 import { Text } from './LocalizedText';
@@ -10,15 +10,17 @@ import { useFeedback } from '../lib/feedback';
 import { useStore } from '../lib/store';
 import { useLanguage } from '../lib/i18n';
 import { AppIcon, AppIconName } from './AppIcon';
-import { C } from './theme';
+import { ThemeColors, useTheme } from './theme';
 import { BrandLogo } from './Brand';
 
 let pendingTabTransition: { href: string; direction: 1 | -1 } | null = null;
 
-export function Avatar({ worker, size = 36 }: { worker: Worker; size?: number }) { return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: worker.color, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>{worker.photoUri ? <Image source={{ uri: worker.photoUri }} accessibilityLabel={`${worker.name} profile photo`} style={{ width: size, height: size }} /> : <Text style={{ fontSize: size * .32, fontWeight: '500', color: C.green }}>{worker.initials}</Text>}</View>; }
-export function SelectionMark({ selected, round = false }: { selected: boolean; round?: boolean }) { return <View style={{ width: 20, height: 20, borderRadius: round ? 10 : 6, borderWidth: 1.5, borderColor: C.green, backgroundColor: selected ? C.green : 'transparent', alignItems: 'center', justifyContent: 'center' }}>{selected && <Check size={14} strokeWidth={3} color="#FFFFFF" />}</View>; }
-export function Pill({ children, tone = 'green' }: { children: React.ReactNode; tone?: 'green' | 'gray' | 'orange' }) { return <View style={[styles.pill, { backgroundColor: tone === 'green' ? C.mint : tone === 'orange' ? C.orange : '#F1F2F0' }]}><Text style={{ color: tone === 'green' ? C.green : tone === 'orange' ? '#936C31' : C.muted, fontSize: 11, fontWeight: '500' }}>{children}</Text></View>; }
+export function Avatar({ worker, size = 36 }: { worker: Worker; size?: number }) { const C = useTheme().colors; return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: worker.color, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>{worker.photoUri ? <Image source={{ uri: worker.photoUri }} accessibilityLabel={`${worker.name} profile photo`} style={{ width: size, height: size }} /> : <Text style={{ fontSize: size * .32, fontWeight: '500', color: C.green }}>{worker.initials}</Text>}</View>; }
+export function SelectionMark({ selected, round = false }: { selected: boolean; round?: boolean }) { const C = useTheme().colors; return <View style={{ width: 20, height: 20, borderRadius: round ? 10 : 6, borderWidth: 1.5, borderColor: C.green, backgroundColor: selected ? C.green : 'transparent', alignItems: 'center', justifyContent: 'center' }}>{selected && <Check size={14} strokeWidth={3} color={C.onGreen} />}</View>; }
+export function Pill({ children, tone = 'green' }: { children: React.ReactNode; tone?: 'green' | 'gray' | 'orange' }) { const C = useTheme().colors; const styles = useStyles(); return <View style={[styles.pill, { backgroundColor: tone === 'green' ? C.mint : tone === 'orange' ? C.orange : C.subtle }]}><Text style={{ color: tone === 'green' ? C.green : tone === 'orange' ? C.warningText : C.muted, fontSize: 11, fontWeight: '500' }}>{children}</Text></View>; }
 export function Button({ label, onPress, icon, variant = 'primary', small = false }: { label: string; onPress: () => void; icon?: React.ReactNode; variant?: 'primary' | 'light' | 'outline' | 'danger'; small?: boolean }) {
+  const C = useTheme().colors;
+  const styles = useStyles();
   const { play } = useFeedback();
   const { t } = useLanguage();
   const [scale] = useState(() => new Animated.Value(1));
@@ -31,11 +33,13 @@ export function Button({ label, onPress, icon, variant = 'primary', small = fals
     Animated.spring(iconMotion, { toValue: pressed ? 1 : 0, speed: 26, bounciness: 7, useNativeDriver: Platform.OS !== 'web' }).start();
   };
   const press = () => { play('select'); onPress(); };
-  return <Animated.View style={{ transform: [{ scale }] }}><Pressable accessibilityRole="button" onPress={press} onPressIn={() => animate(true)} onPressOut={() => animate(false)} style={({ pressed }) => [styles.button, small && { minHeight: 39, paddingHorizontal: 15 }, variant === 'light' && { backgroundColor: C.mint }, variant === 'outline' && { backgroundColor: C.surface, borderWidth: 1, borderColor: C.line }, variant === 'danger' && { backgroundColor: '#FFF4F2', borderWidth: 1, borderColor: '#F4D4CE' }, pressed && { opacity: .82 }]}>{icon && <Animated.View style={{ transform: [{ translateY: iconMotion.interpolate({ inputRange: [0, 1], outputRange: [0, -2] }) }, { scale: iconMotion.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] }) }, { rotate: iconMotion.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-7deg'] }) }] }}>{icon}</Animated.View>}<Text style={[styles.buttonText, variant !== 'primary' && { color: variant === 'danger' ? C.red : C.green }, small && { fontSize: 13 }]}>{t(label)}</Text></Pressable></Animated.View>;
+  return <Animated.View style={{ transform: [{ scale }] }}><Pressable accessibilityRole="button" onPress={press} onPressIn={() => animate(true)} onPressOut={() => animate(false)} style={({ pressed }) => [styles.button, small && { minHeight: 39, paddingHorizontal: 15 }, variant === 'light' && { backgroundColor: C.mint }, variant === 'outline' && { backgroundColor: C.surface, borderWidth: 1, borderColor: C.line }, variant === 'danger' && { backgroundColor: C.dangerSurface, borderWidth: 1, borderColor: C.red }, pressed && { opacity: .82 }]}>{icon && <Animated.View style={{ transform: [{ translateY: iconMotion.interpolate({ inputRange: [0, 1], outputRange: [0, -2] }) }, { scale: iconMotion.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] }) }, { rotate: iconMotion.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-7deg'] }) }] }}>{icon}</Animated.View>}<Text style={[styles.buttonText, variant !== 'primary' && { color: variant === 'danger' ? C.red : C.green }, small && { fontSize: 13 }]}>{t(label)}</Text></Pressable></Animated.View>;
 }
-export function Card({ children, style }: { children: React.ReactNode; style?: object }) { return <View style={[styles.card, style]}>{children}</View>; }
-export function Section({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) { const { t } = useLanguage(); return <View style={styles.section}><Text style={styles.sectionTitle}>{t(title)}</Text>{action && <Pressable onPress={onAction}><Text style={styles.sectionAction}>{t(action)}</Text></Pressable>}</View>; }
+export function Card({ children, style }: { children: React.ReactNode; style?: object }) { const styles = useStyles(); return <View style={[styles.card, style]}>{children}</View>; }
+export function Section({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) { const styles = useStyles(); const { t } = useLanguage(); return <View style={styles.section}><Text style={styles.sectionTitle}>{t(title)}</Text>{action && <Pressable onPress={onAction}><Text style={styles.sectionAction}>{t(action)}</Text></Pressable>}</View>; }
 export function Screen({ children, title, subtitle, back = false, action, noNav = false }: { children?: React.ReactNode; title?: string; subtitle?: string; back?: boolean; action?: React.ReactNode; noNav?: boolean }) {
+  const C = useTheme().colors;
+  const styles = useStyles();
   const { role, workers, selectedWorkerId, workspaceName, accountEmail, notifications } = useStore();
   const { t } = useLanguage();
   const path = usePathname();
@@ -88,6 +92,8 @@ export function Screen({ children, title, subtitle, back = false, action, noNav 
   </SafeAreaView>;
 }
 function BottomNav({ role, desktop = false }: { role: 'admin' | 'worker'; desktop?: boolean }) {
+  const C = useTheme().colors;
+  const styles = useStyles();
   const { play } = useFeedback();
   const { t } = useLanguage();
   const path = usePathname();
@@ -108,21 +114,21 @@ function BottomNav({ role, desktop = false }: { role: 'admin' | 'worker'; deskto
     {tabs.map(({ href, label, icon }, index) => {
       const active = path === href || (href === '/schedule' && (path.startsWith('/shift/') || path.startsWith('/edit-shift/') || path === '/new-shift')) || (href === '/team' && (path.startsWith('/worker/') || path === '/new-worker'));
       return <Pressable key={href} accessibilityRole="tab" accessibilityState={{ selected: active }} onHoverIn={() => setHovered(href)} onHoverOut={() => setHovered(null)} onFocus={() => setHovered(href)} onBlur={() => setHovered(null)} onPress={() => { setActivated(href); setActivationCount(value => value + 1); play('select'); if (path !== href) { const from = tabs.findIndex(tab => path === tab.href || (tab.href === '/schedule' && path.startsWith('/shift/')) || (tab.href === '/team' && path.startsWith('/worker/'))); pendingTabTransition = { href, direction: index > Math.max(from, 0) ? 1 : -1 }; router.replace(href as never); } }} style={desktop ? [styles.sideNavItem, active && styles.sideNavActive] : styles.navItem}>
-        <View style={desktop ? styles.sideIcon : [styles.navIcon, active && styles.navActive]}><AppIcon key={activated === href ? activationCount : 0} name={icon as AppIconName} size={20} color={active ? C.green : '#929B95'} playing={hovered === href || activated === href} /></View>
+        <View style={desktop ? styles.sideIcon : [styles.navIcon, active && styles.navActive]}><AppIcon key={activated === href ? activationCount : 0} name={icon as AppIconName} size={20} color={active ? C.green : C.muted} playing={hovered === href || activated === href} /></View>
         <Text style={desktop ? [styles.sideLabel, active && styles.sideLabelActive] : [styles.navLabel, active && { color: C.green, fontWeight: '500' }]}>{t(label)}</Text>
       </Pressable>;
     })}
     {desktop && <View style={{ marginTop: 'auto', paddingHorizontal: 17, paddingVertical: 24, borderTopWidth: 1, borderTopColor: C.line, flexDirection: 'row', alignItems: 'center', gap: 8 }}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#94AC81' }} /><Text style={{ color: C.muted, fontSize: 11 }}>{t(role === 'admin' ? 'Organization admin' : 'Worker')}</Text></View>}
   </View>;
 }
-export function Empty({ title, detail }: { title: string; detail: string }) { const { t } = useLanguage(); return <Card style={{ alignItems: 'center', padding: 28 }}><Text style={{ fontSize: 16, fontWeight: '500', color: C.ink }}>{t(title)}</Text><Text style={{ color: C.muted, marginTop: 6, textAlign: 'center', lineHeight: 20 }}>{t(detail)}</Text></Card>; }
-export const styles = StyleSheet.create({
+export function Empty({ title, detail }: { title: string; detail: string }) { const C = useTheme().colors; const { t } = useLanguage(); return <Card style={{ alignItems: 'center', padding: 28 }}><Text style={{ fontSize: 16, fontWeight: '500', color: C.ink }}>{t(title)}</Text><Text style={{ color: C.muted, marginTop: 6, textAlign: 'center', lineHeight: 20 }}>{t(detail)}</Text></Card>; }
+function makeStyles(C: ThemeColors) { return StyleSheet.create({
   desktopShell: { flex: 1, flexDirection: 'row' },
   desktopMain: { flex: 1, minWidth: 0 },
   desktopTopbar: { height: 76, paddingHorizontal: 44, backgroundColor: C.bg },
   desktopBody: { maxWidth: 1180, paddingHorizontal: 44, paddingTop: 35, paddingBottom: 64 },
   desktopFocusedBody: { maxWidth: 790, paddingTop: 38 },
-  sideNav: { width: 236, backgroundColor: '#F1F4ED', borderRightWidth: 1, borderRightColor: C.line, paddingHorizontal: 15, paddingTop: 27 },
+  sideNav: { width: 236, backgroundColor: C.nav, borderRightWidth: 1, borderRightColor: C.line, paddingHorizontal: 15, paddingTop: 27 },
   sideBrandBox: { paddingHorizontal: 15, marginBottom: 22 },
   sideCaption: { color: C.muted, fontSize: 11 },
   sideNavItem: { height: 47, flexDirection: 'row', alignItems: 'center', borderRadius: 8, paddingHorizontal: 14, marginBottom: 6 },
@@ -130,5 +136,6 @@ export const styles = StyleSheet.create({
   sideIcon: { width: 32, alignItems: 'flex-start' },
   sideLabel: { fontSize: 13, color: C.muted, fontWeight: '400' },
   sideLabelActive: { color: C.green, fontWeight: '500' },
-  safe: { flex: 1, backgroundColor: C.surface }, topbar: { height: 66, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', gap: 8, borderBottomWidth: 1, borderBottomColor: '#EFF0ED', backgroundColor: C.surface }, topIcon: { width: 35, height: 35, justifyContent: 'center', alignItems: 'center' }, headerButton: { width: 39, height: 39, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg }, unreadDot: { position: 'absolute', width: 8, height: 8, borderRadius: 4, right: 7, top: 6, backgroundColor: C.red, borderWidth: 1, borderColor: C.surface }, headerProfile: { width: 39, height: 39, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: C.mint, borderWidth: 1, borderColor: '#D5E8DC' }, headerInitials: { fontSize: 13, fontWeight: '600', color: C.green }, brand: { fontSize: 23, letterSpacing: -1.2, fontWeight: '600', color: C.ink }, body: { paddingHorizontal: 22, paddingTop: 25, paddingBottom: 42, width: '100%', maxWidth: 620, alignSelf: 'center' }, pageHeading: { marginBottom: 23 }, title: { fontSize: 33, fontWeight: '400', color: C.ink, letterSpacing: -.7 }, subtitle: { color: C.muted, marginTop: 6, fontSize: 14, lineHeight: 20 }, card: { borderRadius: 12, padding: 20, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line }, section: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 28, marginBottom: 13 }, sectionTitle: { fontSize: 19, fontWeight: '500', letterSpacing: -.3, color: C.ink }, sectionAction: { fontSize: 13, fontWeight: '500', color: C.green }, button: { minHeight: 49, borderRadius: 8, backgroundColor: C.green, paddingHorizontal: 19, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }, buttonText: { color: '#FFFFFF', fontWeight: '500', fontSize: 14 }, pill: { alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }, nav: { height: 69, paddingHorizontal: 12, backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.line, flexDirection: 'row', justifyContent: 'space-around' }, navItem: { flex: 1, alignItems: 'center', justifyContent: 'center' }, navIcon: { width: 44, height: 31, borderRadius: 9, alignItems: 'center', justifyContent: 'center' }, navActive: { backgroundColor: C.mint }, navLabel: { marginTop: 2, fontSize: 10, color: '#929B95' },
-});
+  safe: { flex: 1, backgroundColor: C.surface }, topbar: { height: 66, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', gap: 8, borderBottomWidth: 1, borderBottomColor: C.line, backgroundColor: C.surface }, topIcon: { width: 35, height: 35, justifyContent: 'center', alignItems: 'center' }, headerButton: { width: 39, height: 39, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg }, unreadDot: { position: 'absolute', width: 8, height: 8, borderRadius: 4, right: 7, top: 6, backgroundColor: C.red, borderWidth: 1, borderColor: C.surface }, headerProfile: { width: 39, height: 39, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: C.mint, borderWidth: 1, borderColor: C.line }, headerInitials: { fontSize: 13, fontWeight: '600', color: C.green }, brand: { fontSize: 23, letterSpacing: -1.2, fontWeight: '600', color: C.ink }, body: { paddingHorizontal: 22, paddingTop: 25, paddingBottom: 42, width: '100%', maxWidth: 620, alignSelf: 'center' }, pageHeading: { marginBottom: 23 }, title: { fontSize: 33, fontWeight: '400', color: C.ink, letterSpacing: -.7 }, subtitle: { color: C.muted, marginTop: 6, fontSize: 14, lineHeight: 20 }, card: { borderRadius: 12, padding: 20, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line }, section: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 28, marginBottom: 13 }, sectionTitle: { fontSize: 19, fontWeight: '500', letterSpacing: -.3, color: C.ink }, sectionAction: { fontSize: 13, fontWeight: '500', color: C.green }, button: { minHeight: 49, borderRadius: 8, backgroundColor: C.green, paddingHorizontal: 19, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }, buttonText: { color: C.onGreen, fontWeight: '500', fontSize: 14 }, pill: { alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }, nav: { height: 69, paddingHorizontal: 12, backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.line, flexDirection: 'row', justifyContent: 'space-around' }, navItem: { flex: 1, alignItems: 'center', justifyContent: 'center' }, navIcon: { width: 44, height: 31, borderRadius: 9, alignItems: 'center', justifyContent: 'center' }, navActive: { backgroundColor: C.mint }, navLabel: { marginTop: 2, fontSize: 10, color: C.muted },
+}); }
+function useStyles() { const C = useTheme().colors; return useMemo(() => makeStyles(C), [C]); }

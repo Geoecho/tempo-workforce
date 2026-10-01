@@ -1,14 +1,17 @@
 import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useEffect } from 'react';
+import * as SystemUI from 'expo-system-ui';
 import { FeedbackProvider } from '../lib/feedback';
 import { ShiftReminders } from '../lib/ShiftReminders';
 import { WatchSync } from '../lib/WatchSync';
 import { StoreProvider } from '../lib/store';
 import { LanguageProvider } from '../lib/i18n';
 import { WebBrandHead } from '../ui/WebBrandHead';
+import { ThemeProvider, useTheme } from '../ui/theme';
 
-function AppStack() { return <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: '#F7F7F5' } }}>
+function AppStack() { const C = useTheme().colors; return <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: C.bg } }}>
   <Stack.Screen name="index" options={{ animation: 'none' }} />
   <Stack.Screen name="schedule" options={{ animation: 'none' }} />
   <Stack.Screen name="team" options={{ animation: 'none' }} />
@@ -20,9 +23,13 @@ function AppStack() { return <Stack screenOptions={{ headerShown: false, animati
 </Stack>; }
 
 function AppContent() {
+  const { scheme, colors: C } = useTheme();
   const pathname = usePathname();
-  if (pathname === '/welcome' || pathname === '/start') return <><StatusBar style="dark" /><AppStack /></>;
-  return <StoreProvider><StatusBar style="dark" /><AppStack /><ShiftReminders /><WatchSync /></StoreProvider>;
+  // Sync Android nav bar / iOS home-indicator background with active theme
+  useEffect(() => { void SystemUI.setBackgroundColorAsync(C.bg); }, [C.bg]);
+  const statusBar = <StatusBar style={pathname === '/welcome' ? 'dark' : scheme === 'dark' ? 'light' : 'dark'} />;
+  if (pathname === '/welcome' || pathname === '/start') return <>{statusBar}<AppStack /></>;
+  return <StoreProvider>{statusBar}<AppStack /><ShiftReminders /><WatchSync /></StoreProvider>;
 }
 
-export default function Layout() { return <SafeAreaProvider><LanguageProvider><FeedbackProvider><WebBrandHead /><AppContent /></FeedbackProvider></LanguageProvider></SafeAreaProvider>; }
+export default function Layout() { return <SafeAreaProvider><ThemeProvider><LanguageProvider><FeedbackProvider><WebBrandHead /><AppContent /></FeedbackProvider></LanguageProvider></ThemeProvider></SafeAreaProvider>; }
