@@ -37,7 +37,7 @@ export function Button({ label, onPress, icon, variant = 'primary', small = fals
 }
 export function Card({ children, style }: { children: React.ReactNode; style?: object }) { const styles = useStyles(); return <View style={[styles.card, style]}>{children}</View>; }
 export function Section({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) { const styles = useStyles(); const { t } = useLanguage(); return <View style={styles.section}><Text style={styles.sectionTitle}>{t(title)}</Text>{action && <Pressable onPress={onAction}><Text style={styles.sectionAction}>{t(action)}</Text></Pressable>}</View>; }
-export function Screen({ children, title, subtitle, back = false, action, noNav = false }: { children?: React.ReactNode; title?: string; subtitle?: string; back?: boolean; action?: React.ReactNode; noNav?: boolean }) {
+export function Screen({ children, title, subtitle, back = false, action, noNav = false, noScroll = false }: { children?: React.ReactNode; title?: string; subtitle?: string; back?: boolean; action?: React.ReactNode; noNav?: boolean; noScroll?: boolean }) {
   const C = useTheme().colors;
   const styles = useStyles();
   const { role, workers, selectedWorkerId, workspaceName, accountEmail, notifications, messages } = useStore();
@@ -83,12 +83,11 @@ export function Screen({ children, title, subtitle, back = false, action, noNav 
     {role === 'worker' && <Pressable accessibilityRole="button" accessibilityLabel={`${unread} unread notifications`} onPress={() => router.push('/notifications')} style={styles.headerButton}><AppIcon name="bell" size={21} color={C.green} playing={false} />{unread > 0 && <View style={styles.unreadDot} />}</Pressable>}
     <Pressable accessibilityRole="button" accessibilityLabel={path === '/settings' ? 'Profile and settings open' : 'Open profile and settings'} accessibilityState={{ disabled: path === '/settings' }} disabled={path === '/settings'} onPress={() => router.push('/settings')} style={[styles.headerProfile, { overflow: 'hidden' }]}>{role === 'worker' && profile?.photoUri ? <Image source={{ uri: profile.photoUri }} style={{ width: 39, height: 39 }} /> : <Text style={styles.headerInitials}>{initials}</Text>}</Pressable>
   </View>;
-  const content = <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={[styles.body, desktop && styles.desktopBody, desktop && (back || path === '/settings') && styles.desktopFocusedBody]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>
-    <Animated.View style={{ opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [direction ? 0 : 10, 0] }) }, { translateX: slideX }] }}>
-      {title && <View style={styles.pageHeading}><Text style={styles.title}>{t(title)}</Text>{subtitle && <Text style={styles.subtitle}>{t(subtitle)}</Text>}</View>}
-      {children}
-    </Animated.View>
-  </ScrollView>;
+  const Inner = <Animated.View style={{ flex: noScroll ? 1 : undefined, opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [direction ? 0 : 10, 0] }) }, { translateX: slideX }] }}>
+    {title && <View style={styles.pageHeading}><Text style={styles.title}>{t(title)}</Text>{subtitle && <Text style={styles.subtitle}>{t(subtitle)}</Text>}</View>}
+    {children}
+  </Animated.View>;
+  const content = noScroll ? <View style={[{ flex: 1, backgroundColor: C.bg }, styles.body, desktop && styles.desktopBody, desktop && (back || path === '/settings') && styles.desktopFocusedBody]}>{Inner}</View> : <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={[styles.body, desktop && styles.desktopBody, desktop && (back || path === '/settings') && styles.desktopFocusedBody]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>{Inner}</ScrollView>;
 
   return <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
     {desktop ? <View style={styles.desktopShell}>

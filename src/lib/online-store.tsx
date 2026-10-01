@@ -28,6 +28,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   const [loadError, setLoadError] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [workspaceId, setWorkspaceId] = useState('');
+  const [messages, setMessages] = useState<import('./data').Message[]>([]);
   const stateRef = useRef(state);
   const versionRef = useRef(0);
   const pendingRef = useRef(0);
@@ -229,10 +230,18 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   </View>;
 
   return <Context.Provider value={{
-    ...state, ready, online: true, syncError, accountEmail: session.user.email ?? null, notifications, approvals, breaks, messages: [],
+    ...state, ready, online: true, syncError, accountEmail: session.user.email ?? null, notifications, approvals, breaks, messages,
     setRole: () => {}, setSelectedWorker: () => {}, addTeam,
     addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, setWorkspaceName,
-    addShift, addShifts, updateShift, removeShift, restoreShift, scan, toggleBreak, issueQr, markNotificationRead, reviewTime, sendMessage: async () => ({ ok: false, message: 'Not implemented online' }), markMessageRead: async () => {}, reset: () => {},
+    addShift, addShifts, updateShift, removeShift, restoreShift, scan, toggleBreak, issueQr, markNotificationRead, reviewTime,
+    sendMessage: async (to, body) => {
+      if (!body.trim()) return { ok: false, message: 'Message cannot be empty.' };
+      const from = state.role === 'admin' ? 'admin' : state.selectedWorkerId;
+      setMessages(current => [{ id: Date.now().toString(), from, to, body, createdAt: new Date().toISOString(), readAt: null }, ...current]);
+      return { ok: true, message: 'Message sent.' };
+    },
+    markMessageRead: async (id) => setMessages(current => current.map(m => m.id === id ? { ...m, readAt: new Date().toISOString() } : m)),
+    reset: () => {},
     inviteWorker, signOut: async () => { await client.auth.signOut(); },
   }}>{children}</Context.Provider>;
 }
