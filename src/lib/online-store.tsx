@@ -6,7 +6,7 @@ import { AuthScreen } from '../ui/AuthScreen';
 import { PasswordRecovery } from '../ui/PasswordRecovery';
 import { WorkspaceSetup } from '../ui/WorkspaceSetup';
 import { useTheme } from '../ui/theme';
-import { BreakEvent, Currency, initialState, newWorkspaceState, paySummary, Punch, Shift, ShiftNotification, State, TimeApproval, teamNames, today, uid, Worker } from './data';
+import { BreakEvent, Currency, initialState, Message, newWorkspaceState, paySummary, Punch, Shift, ShiftNotification, State, TimeApproval, teamNames, today, uid, Worker } from './data';
 import { Context, Result } from './store-context';
 import { recoveryRedirect, supabase } from './supabase';
 
@@ -28,7 +28,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   const [loadError, setLoadError] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [workspaceId, setWorkspaceId] = useState('');
-  const [messages, setMessages] = useState<import('./data').Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const stateRef = useRef(state);
   const versionRef = useRef(0);
   const pendingRef = useRef(0);
@@ -49,7 +49,11 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const loadSnapshot = useCallback(async (): Promise<State | null> => {
-    const [{ data, error }, { data: breakData, error: breakError }] = await Promise.all([client.rpc('tempo_snapshot'), client.rpc('tempo_break_snapshot')]);
+    const [{ data, error }, { data: breakData, error: breakError }, { data: msgData }] = await Promise.all([
+      client.rpc('tempo_snapshot'),
+      client.rpc('tempo_break_snapshot'),
+      client.rpc('tempo_messages_snapshot'),
+    ]);
     if (error) throw error;
     if (breakError) throw breakError;
     if (!data) return null;
@@ -60,6 +64,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
     setNotifications(snapshot.notifications ?? []);
     setApprovals(snapshot.approvals ?? []);
     setBreaks((breakData as BreakEvent[] | null) ?? []);
+    setMessages((msgData as Message[] | null) ?? []);
     setWorkspaceId(snapshot.workspaceId);
     return snapshot.state;
   }, []);
@@ -110,6 +115,20 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
     }, 12000);
     return () => clearInterval(timer);
   }, [ready, workspaceId, loadSnapshot]);
+
+  // Realtime: listen for new messages on this workspace
+  useEffect(() => {
+    if (!ready || !workspaceId) return;
+    const sub = client
+      .channel(`messages:${workspaceId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tempo_messages', filter: `workspace_id=eq.${workspaceId}` }, () => {
+        void client.rpc('tempo_messages_snapshot').then(({ data }) => {
+          if (data) setMessages(data as Message[]);
+        });
+      })
+      .subscribe();
+    return () => { void sub.unsubscribe(); };
+  }, [ready, workspaceId]);
 
   const commit = (update: (current: State) => State) => {
     if (stateRef.current.role !== 'admin' || !workspaceId) return;
@@ -235,12 +254,17 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
     addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, setWorkspaceName,
     addShift, addShifts, updateShift, removeShift, restoreShift, scan, toggleBreak, issueQr, markNotificationRead, reviewTime,
     sendMessage: async (to, body) => {
-      if (!body.trim()) return { ok: false, message: 'Message cannot be empty.' };
+      const { error } = await client.rpc('tempo_send_message', { p_to: to, p_body: body });
+      if (error) return { ok: false, message: error.message };
+      // Optimistic update — Realtime will sync the full list shortly
       const from = state.role === 'admin' ? 'admin' : state.selectedWorkerId;
-      setMessages(current => [{ id: Date.now().toString(), from, to, body, createdAt: new Date().toISOString(), readAt: null }, ...current]);
+      setMessages(current => [...current, { id: Date.now().toString(), from, to, body, createdAt: new Date().toISOString(), readAt: null }]);
       return { ok: true, message: 'Message sent.' };
     },
-    markMessageRead: async (id) => setMessages(current => current.map(m => m.id === id ? { ...m, readAt: new Date().toISOString() } : m)),
+    markMessageRead: async (id) => {
+      await client.rpc('tempo_mark_message_read', { p_id: id });
+      setMessages(current => current.map(m => m.id === id ? { ...m, readAt: new Date().toISOString() } : m));
+    },
     reset: () => {},
     inviteWorker, signOut: async () => { await client.auth.signOut(); },
   }}>{children}</Context.Provider>;

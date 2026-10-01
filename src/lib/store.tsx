@@ -105,10 +105,14 @@ function LocalStoreProvider({ children }: { children: React.ReactNode }) {
     if (!body.trim()) return { ok: false, message: 'Message cannot be empty.' };
     const from = state.role === 'admin' ? 'admin' : state.selectedWorkerId;
     const msg: Message = { id: uid(), from, to, body: body.trim(), createdAt: new Date().toISOString(), readAt: null };
+    setState(s => ({ ...s, messages: [msg, ...(s.messages || [])] }));
     setMessages(current => [msg, ...current]);
     return { ok: true, message: 'Message sent.' };
   };
-  const markMessageRead = async (id: string) => setMessages(current => current.map(m => m.id === id ? { ...m, readAt: m.readAt ?? new Date().toISOString() } : m));
+  const markMessageRead = async (id: string) => {
+    setState(s => ({ ...s, messages: (s.messages || []).map(m => m.id === id ? { ...m, readAt: m.readAt ?? new Date().toISOString() } : m) }));
+    setMessages(current => current.map(m => m.id === id ? { ...m, readAt: m.readAt ?? new Date().toISOString() } : m));
+  };
   const reviewTime = async (workerId: string, date: string, approve: boolean): Promise<Result> => {
     if (approve && !state.punches.some(p => p.workerId === workerId && (p.workDate ?? p.at.slice(0, 10)) === date)) return { ok: false, message: 'No recorded time for this day.' };
     setApprovals(current => approve ? [...current.filter(a => !(a.workerId === workerId && a.date === date)), { workerId, date, approvedBy: 'Demo manager', approvedAt: new Date().toISOString() }] : current.filter(a => !(a.workerId === workerId && a.date === date)));
