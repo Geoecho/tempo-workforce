@@ -45,6 +45,13 @@ export default function Messages() {
     });
   }, [relevantMessages, role, selectedWorkerId, markMessageRead]);
 
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [relevantMessages.length]);
+
   return <Screen back noScroll title="Messages" subtitle="Chat with your team">
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0} style={{ flex: 1 }}>
       <View style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>

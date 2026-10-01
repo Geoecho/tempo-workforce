@@ -87,7 +87,8 @@ export function Screen({ children, title, subtitle, back = false, action, noNav 
     {title && <View style={styles.pageHeading}><Text style={styles.title}>{t(title)}</Text>{subtitle && <Text style={styles.subtitle}>{t(subtitle)}</Text>}</View>}
     {children}
   </Animated.View>;
-  const content = noScroll ? <View style={[{ flex: 1, backgroundColor: C.bg }, styles.body, desktop && styles.desktopBody, desktop && (back || path === '/settings') && styles.desktopFocusedBody]}>{Inner}</View> : <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={[styles.body, desktop && styles.desktopBody, desktop && (back || path === '/settings') && styles.desktopFocusedBody]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>{Inner}</ScrollView>;
+  const bodyStyles = [styles.body, desktop && styles.desktopBody, desktop && (back || path === '/settings') && styles.desktopFocusedBody];
+  const content = noScroll ? <View style={{ flex: 1, backgroundColor: C.bg }}><View style={[{ flex: 1 }, bodyStyles]}>{Inner}</View></View> : <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={bodyStyles} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>{Inner}</ScrollView>;
 
   return <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
     {desktop ? <View style={styles.desktopShell}>
