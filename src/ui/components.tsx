@@ -1,5 +1,5 @@
 import { router, usePathname } from 'expo-router';
-import { Check, ChevronLeft } from 'lucide-react-native';
+import { Check, ChevronLeft, MessageCircle } from 'lucide-react-native';
 import React, { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Animated, Image, Keyboard, Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Pressable } from './LocalizedPressable';
@@ -40,7 +40,7 @@ export function Section({ title, action, onAction }: { title: string; action?: s
 export function Screen({ children, title, subtitle, back = false, action, noNav = false }: { children?: React.ReactNode; title?: string; subtitle?: string; back?: boolean; action?: React.ReactNode; noNav?: boolean }) {
   const C = useTheme().colors;
   const styles = useStyles();
-  const { role, workers, selectedWorkerId, workspaceName, accountEmail, notifications } = useStore();
+  const { role, workers, selectedWorkerId, workspaceName, accountEmail, notifications, messages } = useStore();
   const { t } = useLanguage();
   const path = usePathname();
   const { width } = useWindowDimensions();
@@ -68,12 +68,18 @@ export function Screen({ children, title, subtitle, back = false, action, noNav 
   const profile = workers.find(worker => worker.id === selectedWorkerId && !worker.archived);
   const initials = role === 'worker' && profile ? profile.initials : (accountEmail?.slice(0, 1) || workspaceName?.slice(0, 1) || 'T').toUpperCase();
   const unread = notifications.filter(item => !item.readAt).length;
+  const unreadMessages = messages?.filter(m => m.readAt === null && m.to !== 'all' && m.from !== (role === 'admin' ? 'admin' : selectedWorkerId)).length || 0;
+  
   const topbar = <View style={[styles.topbar, desktop && styles.desktopTopbar]}>
     {back && <Pressable accessibilityLabel="Go back" onPress={() => router.back()} style={styles.topIcon}><ChevronLeft size={23} color={C.ink} /></Pressable>}
     <View style={{ flex: 1, alignItems: 'flex-start' }}>
       {!desktop ? <BrandLogo size={24} /> : <Text style={{ color: C.muted, fontSize: 12 }}>{workspaceName || t('Your workspace')}</Text>}
     </View>
     {action}
+    <Pressable accessibilityRole="button" accessibilityLabel="Messages" onPress={() => router.push('/messages')} style={styles.headerButton}>
+      <MessageCircle size={20} color={C.green} />
+      {unreadMessages > 0 && <View style={styles.unreadDot} />}
+    </Pressable>
     {role === 'worker' && <Pressable accessibilityRole="button" accessibilityLabel={`${unread} unread notifications`} onPress={() => router.push('/notifications')} style={styles.headerButton}><AppIcon name="bell" size={21} color={C.green} playing={false} />{unread > 0 && <View style={styles.unreadDot} />}</Pressable>}
     <Pressable accessibilityRole="button" accessibilityLabel={path === '/settings' ? 'Profile and settings open' : 'Open profile and settings'} accessibilityState={{ disabled: path === '/settings' }} disabled={path === '/settings'} onPress={() => router.push('/settings')} style={[styles.headerProfile, { overflow: 'hidden' }]}>{role === 'worker' && profile?.photoUri ? <Image source={{ uri: profile.photoUri }} style={{ width: 39, height: 39 }} /> : <Text style={styles.headerInitials}>{initials}</Text>}</Pressable>
   </View>;

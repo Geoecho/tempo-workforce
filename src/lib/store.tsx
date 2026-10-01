@@ -1,22 +1,25 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useContext, useEffect, useState } from 'react';
-import { activeBreak, BreakEvent, Currency, initialState, parseQr, paySummary, punchCooldownSeconds, Punch, qrPayload, Shift, ShiftNotification, State, TimeApproval, teamNames, today, uid, Worker, MAX_PAID_MINUTES_PER_DAY } from './data';
+import { activeBreak, BreakEvent, Currency, initialState, Message, parseQr, paySummary, punchCooldownSeconds, Punch, qrPayload, Shift, ShiftNotification, State, TimeApproval, teamNames, today, uid, Worker, MAX_PAID_MINUTES_PER_DAY } from './data';
 import { Context, Result } from './store-context';
 import { supabase } from './supabase';
 import { OnlineStoreProvider } from './online-store';
 
 export const KEY = 'tempo-demo-v2';
 const BREAK_KEY = 'tempo-demo-breaks-v1';
+const MSG_KEY = 'tempo-demo-messages-v1';
 
 function LocalStoreProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<State>(initialState);
   const [notifications, setNotifications] = useState<ShiftNotification[]>([]);
   const [approvals, setApprovals] = useState<TimeApproval[]>([]);
   const [breaks, setBreaks] = useState<BreakEvent[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [ready, setReady] = useState(false);
-  useEffect(() => { Promise.all([AsyncStorage.getItem(KEY), AsyncStorage.getItem(BREAK_KEY)]).then(([raw, rawBreaks]) => { if (raw) { const saved = { ...initialState, ...JSON.parse(raw) } as State; saved.workers = saved.workers.map(w => ({ ...w, hourlyRate: w.hourlyRate ?? initialState.workers.find(seed => seed.id === w.id)?.hourlyRate ?? 0, phone: w.phone ?? initialState.workers.find(seed => seed.id === w.id)?.phone })); setState(saved); } if (rawBreaks) setBreaks(JSON.parse(rawBreaks)); }).catch(() => {}).finally(() => setReady(true)); }, []);
+  useEffect(() => { Promise.all([AsyncStorage.getItem(KEY), AsyncStorage.getItem(BREAK_KEY), AsyncStorage.getItem(MSG_KEY)]).then(([raw, rawBreaks, rawMessages]) => { if (raw) { const saved = { ...initialState, ...JSON.parse(raw) } as State; saved.workers = saved.workers.map(w => ({ ...w, hourlyRate: w.hourlyRate ?? initialState.workers.find(seed => seed.id === w.id)?.hourlyRate ?? 0, phone: w.phone ?? initialState.workers.find(seed => seed.id === w.id)?.phone })); setState(saved); } if (rawBreaks) setBreaks(JSON.parse(rawBreaks)); if (rawMessages) setMessages(JSON.parse(rawMessages)); }).catch(() => {}).finally(() => setReady(true)); }, []);
   useEffect(() => { if (ready) AsyncStorage.setItem(KEY, JSON.stringify(state)).catch(() => {}); }, [state, ready]);
   useEffect(() => { if (ready) AsyncStorage.setItem(BREAK_KEY, JSON.stringify(breaks)).catch(() => {}); }, [breaks, ready]);
+  useEffect(() => { if (ready) AsyncStorage.setItem(MSG_KEY, JSON.stringify(messages)).catch(() => {}); }, [messages, ready]);
   const setRole = (role: State['role']) => setState(s => role === 'worker' && !s.workers.some(w => !w.archived) ? s : ({ ...s, role }));
   const setSelectedWorker = (selectedWorkerId: string) => setState(s => s.workers.some(w => w.id === selectedWorkerId && !w.archived) ? ({ ...s, selectedWorkerId }) : s);
   const addTeam = (rawName: string) => setState(s => {
@@ -87,13 +90,21 @@ function LocalStoreProvider({ children }: { children: React.ReactNode }) {
     setBreaks(current => [...current, { id: uid(), shiftId, workerId: state.selectedWorkerId, type, at: new Date().toISOString(), workDate: shift.date }]);
     return { ok: true, message: type === 'start' ? 'Paid break started.' : 'Paid break ended.' };
   };
-  const reset = () => { setState(initialState); setBreaks([]); };
+  const reset = () => { setState(initialState); setBreaks([]); setMessages([]); };
+  const sendMessage = async (to: string | 'all', body: string): Promise<Result> => {
+    if (!body.trim()) return { ok: false, message: 'Message cannot be empty.' };
+    const from = state.role === 'admin' ? 'admin' : state.selectedWorkerId;
+    const msg: Message = { id: uid(), from, to, body: body.trim(), createdAt: new Date().toISOString(), readAt: null };
+    setMessages(current => [msg, ...current]);
+    return { ok: true, message: 'Message sent.' };
+  };
+  const markMessageRead = async (id: string) => setMessages(current => current.map(m => m.id === id ? { ...m, readAt: m.readAt ?? new Date().toISOString() } : m));
   const reviewTime = async (workerId: string, date: string, approve: boolean): Promise<Result> => {
     if (approve && !state.punches.some(p => p.workerId === workerId && (p.workDate ?? p.at.slice(0, 10)) === date)) return { ok: false, message: 'No recorded time for this day.' };
     setApprovals(current => approve ? [...current.filter(a => !(a.workerId === workerId && a.date === date)), { workerId, date, approvedBy: 'Demo manager', approvedAt: new Date().toISOString() }] : current.filter(a => !(a.workerId === workerId && a.date === date)));
     return { ok: true, message: approve ? 'Time approved.' : 'Approval removed.' };
   };
-  return <Context.Provider value={{ ...state, ready, online: false, syncError: null, accountEmail: null, notifications, approvals, breaks, setRole, setSelectedWorker, addTeam, addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, setWorkspaceName, addShift, addShifts, updateShift, removeShift, restoreShift, scan, toggleBreak, issueQr: async shiftId => qrPayload(shiftId), markNotificationRead: async id => setNotifications(current => current.map(item => item.id === id ? { ...item, readAt: new Date().toISOString() } : item)), reviewTime, reset, inviteWorker: async () => ({ ok: false, message: 'Online database is not configured.' }), signOut: async () => {} }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ ...state, ready, online: false, syncError: null, accountEmail: null, notifications, approvals, breaks, messages, setRole, setSelectedWorker, addTeam, addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, setWorkspaceName, addShift, addShifts, updateShift, removeShift, restoreShift, scan, toggleBreak, issueQr: async shiftId => qrPayload(shiftId), markNotificationRead: async id => setNotifications(current => current.map(item => item.id === id ? { ...item, readAt: new Date().toISOString() } : item)), reviewTime, sendMessage, markMessageRead, reset, inviteWorker: async () => ({ ok: false, message: 'Online database is not configured.' }), signOut: async () => {} }}>{children}</Context.Provider>;
 }
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   return supabase ? <OnlineStoreProvider>{children}</OnlineStoreProvider> : <LocalStoreProvider>{children}</LocalStoreProvider>;

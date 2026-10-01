@@ -229,10 +229,10 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   </View>;
 
   return <Context.Provider value={{
-    ...state, ready, online: true, syncError, accountEmail: session.user.email ?? null, notifications, approvals, breaks,
+    ...state, ready, online: true, syncError, accountEmail: session.user.email ?? null, notifications, approvals, breaks, messages: [],
     setRole: () => {}, setSelectedWorker: () => {}, addTeam,
     addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, setWorkspaceName,
-    addShift, addShifts, updateShift, removeShift, restoreShift, scan, toggleBreak, issueQr, markNotificationRead, reviewTime, reset: () => {},
+    addShift, addShifts, updateShift, removeShift, restoreShift, scan, toggleBreak, issueQr, markNotificationRead, reviewTime, sendMessage: async () => ({ ok: false, message: 'Not implemented online' }), markMessageRead: async () => {}, reset: () => {},
     inviteWorker, signOut: async () => { await client.auth.signOut(); },
   }}>{children}</Context.Provider>;
 }

@@ -1,5 +1,5 @@
 import { createContext } from 'react';
-import type { BreakEvent, Currency, PaySummary, Punch, Shift, ShiftNotification, State, TimeApproval, Worker } from './data';
+import type { BreakEvent, Currency, Message, PaySummary, Punch, Shift, ShiftNotification, State, TimeApproval, Worker } from './data';
 
 export type Result = { ok: boolean; message: string; type?: 'in' | 'out'; pay?: PaySummary };
 export type Store = State & {
@@ -10,6 +10,9 @@ export type Store = State & {
   notifications: ShiftNotification[];
   approvals: TimeApproval[];
   breaks: BreakEvent[];
+  messages: Message[];
+  sendMessage: (to: string | 'all', body: string) => Promise<Result>;
+  markMessageRead: (id: string) => Promise<void>;
   setRole: (role: State['role']) => void;
   setSelectedWorker: (id: string) => void;
   addTeam: (name: string) => void;

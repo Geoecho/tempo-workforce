@@ -9,6 +9,7 @@ export type Punch = { id: string; shiftId: string; workerId: string; type: 'in' 
 export type BreakEvent = { id: string; shiftId: string; workerId: string; type: 'start' | 'end'; at: string; workDate: string };
 export type ShiftNotification = { id: string; workerId: string; shiftId: string; kind: 'assigned' | 'changed' | 'removed'; title: string; body: string; createdAt: string; readAt: string | null };
 export type TimeApproval = { workerId: string; date: string; approvedBy: string; approvedAt: string };
+export type Message = { id: string; from: 'admin' | string; to: string | 'all'; body: string; createdAt: string; readAt: string | null };
 export type State = { role: Role; selectedWorkerId: string; currency: Currency; workspaceName?: string; teams?: string[]; workers: Worker[]; shifts: Shift[]; punches: Punch[] };
 export const teamNames = (state: Pick<State, 'teams' | 'workers'>): string[] =>
   [...new Set([...(state.teams ?? []), ...state.workers.map(worker => worker.team)].filter(Boolean))];
