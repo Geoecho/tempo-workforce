@@ -10,27 +10,29 @@ import { useTheme } from '../ui/theme';
 
 export default function Messages() {
   const C = useTheme().colors;
-  const { messages, sendMessage, markMessageRead, role, selectedWorkerId, workers } = useStore();
+  const { messages, sendMessage, markMessageRead, role, selectedWorkerId, workers, workspaceName } = useStore();
   const [text, setText] = useState('');
   const [target, setTarget] = useState<string>('all');
   
   const relevantMessages = messages.filter(m => {
+    if (target === 'all') return m.to === 'all';
+    
     if (role === 'admin') {
-      if (target === 'all') return true;
-      return m.to === target || m.from === target || m.to === 'all';
+      return (m.to === target && m.from === 'admin') || (m.from === target && m.to === 'admin');
+    } else {
+      return (m.to === selectedWorkerId && m.from === 'admin') || (m.from === selectedWorkerId && m.to === 'admin');
     }
-    return m.to === 'all' || m.to === selectedWorkerId || m.from === selectedWorkerId;
   }).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
   const send = async () => {
     if (!text.trim()) return;
     const body = text;
     setText('');
-    await sendMessage(role === 'admin' ? target : 'admin', body);
+    await sendMessage(target, body);
   };
 
   const getSenderName = (fromId: string) => {
-    if (fromId === 'admin') return 'Admin';
+    if (fromId === 'admin') return workspaceName || 'Admin';
     return workers.find(w => w.id === fromId)?.name || 'Unknown';
   };
 
@@ -42,22 +44,27 @@ export default function Messages() {
     });
   }, [relevantMessages, role, selectedWorkerId, markMessageRead]);
 
-  return <Screen back noScroll title="Messages" subtitle={role === 'admin' ? 'Broadcast to team or message individuals' : 'Messages from admin'}>
+  return <Screen back noScroll title="Messages" subtitle="Chat with your team">
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <View style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         
-        {role === 'admin' && (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-            <Pressable onPress={() => setTarget('all')} style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: target === 'all' ? C.green : C.surface, borderWidth: 1, borderColor: target === 'all' ? C.green : C.line }}>
-              <Text style={{ color: target === 'all' ? C.onGreen : C.ink, fontSize: 13, fontWeight: '500' }}>All Team</Text>
-            </Pressable>
-            {workers.filter(w => !w.archived).map(w => (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+          <Pressable onPress={() => setTarget('all')} style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: target === 'all' ? C.green : C.surface, borderWidth: 1, borderColor: target === 'all' ? C.green : C.line }}>
+            <Text style={{ color: target === 'all' ? C.onGreen : C.ink, fontSize: 13, fontWeight: '500' }}>All Team</Text>
+          </Pressable>
+          
+          {role === 'admin' ? (
+            workers.filter(w => !w.archived).map(w => (
               <Pressable key={w.id} onPress={() => setTarget(w.id)} style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: target === w.id ? C.green : C.surface, borderWidth: 1, borderColor: target === w.id ? C.green : C.line }}>
                 <Text style={{ color: target === w.id ? C.onGreen : C.ink, fontSize: 13, fontWeight: '500' }}>{w.name.split(' ')[0]}</Text>
               </Pressable>
-            ))}
-          </View>
-        )}
+            ))
+          ) : (
+            <Pressable onPress={() => setTarget('admin')} style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: target === 'admin' ? C.green : C.surface, borderWidth: 1, borderColor: target === 'admin' ? C.green : C.line }}>
+              <Text style={{ color: target === 'admin' ? C.onGreen : C.ink, fontSize: 13, fontWeight: '500' }}>{workspaceName || 'Admin'}</Text>
+            </Pressable>
+          )}
+        </View>
 
         <ScrollView style={{ flex: 1, marginBottom: 16 }} contentContainerStyle={{ paddingBottom: 20 }}>
           {relevantMessages.length === 0 ? (
