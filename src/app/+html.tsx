@@ -18,6 +18,9 @@ export default function Root({ children }: PropsWithChildren) {
           document.addEventListener('touchstart', function(event) {
             if (event.touches.length > 1) event.preventDefault();
           }, { passive: false });
+          document.addEventListener('touchmove', function(event) {
+            if (event.touches.length > 1) event.preventDefault();
+          }, { passive: false });
           let lastTouchEnd = 0;
           document.addEventListener('touchend', function(event) {
             const now = (new Date()).getTime();
@@ -26,6 +29,9 @@ export default function Root({ children }: PropsWithChildren) {
           }, { passive: false });
           document.addEventListener('gesturestart', function(event) {
             event.preventDefault();
+          }, { passive: false });
+          document.addEventListener('wheel', function(event) {
+            if (event.ctrlKey) event.preventDefault();
           }, { passive: false });
         `}} />
         <ScrollViewStyleReset />
