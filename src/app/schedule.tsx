@@ -1,14 +1,15 @@
 import { router } from 'expo-router';
-import { Download, Plus } from 'lucide-react-native';
+import { ChevronDown, ChevronRight, Download, Plus } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { Platform, Share, useWindowDimensions, View } from 'react-native';
 import { Pressable } from '../ui/LocalizedPressable';
 import { Text } from '../ui/LocalizedText';
 import { csvRow, downloadCsv } from '../lib/csv';
-import { durationMinutes, shiftHasEnded, shiftHasOpenPunch, today } from '../lib/data';
+import { durationMinutes, formatDay, shiftHasEnded, shiftHasOpenPunch, today } from '../lib/data';
+import { groupUpcomingShifts } from '../lib/shift-groups';
 import { useStore } from '../lib/store';
 import { useLanguage } from '../lib/i18n';
-import { Button, Empty, Screen } from '../ui/components';
+import { Button, Card, Empty, Screen } from '../ui/components';
 import { ShiftCard } from '../ui/ShiftCard';
 import { C } from '../ui/theme';
 
@@ -18,10 +19,13 @@ export default function Schedule() {
   const { width } = useWindowDimensions();
   const desktop = Platform.OS === 'web' && width >= 960;
   const [filter, setFilter] = useState<'upcoming' | 'history'>('upcoming');
+  const [expanded, setExpanded] = useState<string[]>([]);
+  const [shown, setShown] = useState<Record<string, number>>({});
   const filtered = shifts
     .filter(s => (role === 'admin' || s.workerIds.includes(selectedWorkerId) || punches.some(p => p.shiftId === s.id && p.workerId === selectedWorkerId))
       && (filter === 'history' ? shiftHasEnded(s) && !(s.date === today() && shiftHasOpenPunch(s.id, punches)) && (!s.archived || punches.some(p => p.shiftId === s.id)) : !s.archived && (!shiftHasEnded(s) || (s.date === today() && shiftHasOpenPunch(s.id, punches)))))
     .sort((a, b) => filter === 'history' ? b.date.localeCompare(a.date) || b.start.localeCompare(a.start) : a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
+  const groups = filter === 'upcoming' ? groupUpcomingShifts(filtered) : filtered.map(shift => ({ key: shift.id, shifts: [shift] }));
   const exportHistory = async () => {
     const lines = [csvRow(['date', 'shift', 'site', 'location', 'scheduled_start', 'scheduled_end', 'worker', 'first_check_in', 'last_check_out', 'recorded_minutes', 'status'])];
     for (const shift of filtered) {
@@ -57,7 +61,21 @@ export default function Schedule() {
       {filter === 'history' ? !!filtered.length && <Button label="Export CSV" small variant="outline" icon={<Download size={16} color={C.green} />} onPress={() => void exportHistory()} /> : role === 'admin' && <Button label="New shift" small icon={<Plus size={16} color="#fff" />} onPress={() => router.push('/new-shift')} />}
     </View>
     {filtered.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-      {filtered.map(s => <View key={s.id} style={{ width: desktop ? '49%' : '100%' }}><ShiftCard shift={s} history={filter === 'history'} /></View>)}
+      {groups.map(group => <View key={group.key} style={{ width: desktop ? '49%' : '100%' }}>
+        {group.shifts.length < 3 ? group.shifts.map(shift => <ShiftCard key={shift.id} shift={shift} history={filter === 'history'} />) : <>
+          <Pressable accessibilityRole="button" accessibilityState={{ expanded: expanded.includes(group.key) }} onPress={() => setExpanded(current => current.includes(group.key) ? current.filter(key => key !== group.key) : [...current, group.key])}>
+            <Card style={{ marginBottom: 10, padding: 18 }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}><View style={{ flex: 1 }}>
+              <Text style={{ color: C.ink, fontSize: 18, fontWeight: '500' }}>{group.shifts[0].title}</Text>
+              <Text style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>{group.shifts[0].site} · {group.shifts[0].start}–{group.shifts[0].end}</Text>
+              <Text style={{ color: C.muted, fontSize: 12, marginTop: 8 }}>{formatDay(group.shifts[0].date)} – {formatDay(group.shifts.at(-1)!.date)} · {group.shifts.length} days</Text>
+            </View>{expanded.includes(group.key) ? <ChevronDown size={18} color={C.green} /> : <ChevronRight size={18} color={C.green} />}</View></Card>
+          </Pressable>
+          {expanded.includes(group.key) && <>
+            {group.shifts.slice(0, shown[group.key] ?? 7).map(shift => <ShiftCard key={shift.id} shift={shift} compact />)}
+            {group.shifts.length > (shown[group.key] ?? 7) && <Pressable accessibilityRole="button" onPress={() => setShown(current => ({ ...current, [group.key]: (current[group.key] ?? 7) + 7 }))} style={{ alignItems: 'center', paddingVertical: 13, marginBottom: 12 }}><Text style={{ color: C.green, fontSize: 13, fontWeight: '500' }}>Show next {Math.min(7, group.shifts.length - (shown[group.key] ?? 7))} days</Text></Pressable>}
+          </>}
+        </>}
+      </View>)}
     </View> : <Empty title={filter === 'history' ? 'No shift history yet' : 'Nothing on the calendar'} detail={filter === 'history' ? 'Finished shifts and their clock records will appear here.' : "New assignments will appear here when they're scheduled."} />}
   </Screen>;
 }

@@ -30,7 +30,7 @@ export function ShiftCard({ shift, compact = false, history = false }: { shift: 
       onPressOut={() => pressScale(1)}
       style={({ pressed }) => pressed && { opacity: .94 }}
     >
-      <Card style={{ padding: compact ? 19 : 23, borderLeftWidth: 3, borderLeftColor: history ? C.line : '#A9BD99' }}>
+      <Card style={{ padding: compact ? 19 : 23 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <View style={{ flex: 1 }}>
             <Text style={{ color: C.muted, fontSize: 11 }}>{formatDay(shift.date)}  ·  {shift.start}–{shift.end}</Text>

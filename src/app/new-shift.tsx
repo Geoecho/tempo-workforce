@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { View } from 'react-native';
 import { Pressable } from '../ui/LocalizedPressable';
 import { Text } from '../ui/LocalizedText';
-import { localDate, repeatShiftDates, ShiftRepeat, today } from '../lib/data';
+import { localDate, repeatShiftDates, ShiftRepeat, today, uid } from '../lib/data';
 import { useFeedback } from '../lib/feedback';
 import { useStore } from '../lib/store';
 import { Avatar, Button, Card, Screen, Section, SelectionMark } from '../ui/components';
@@ -53,7 +53,8 @@ export default function NewShift() {
     maxRepeatDate.setDate(maxRepeatDate.getDate() + 30);
     if (repeat !== 'once' && (until < date || until > localDate(maxRepeatDate))) return setMessage('Choose a repeat end date within 31 days of the first shift.');
     if (!dates.length) return setMessage('No workdays fall in this date range.');
-    addShifts(dates.map(day => ({ title: title.trim(), site: site.trim(), location: location.trim(), ...(pin ?? {}), date: day, start, end, team: workers.find(w => w.id === selected[0])?.team ?? 'General', workerIds: selected })));
+    const seriesId = dates.length > 1 ? uid() : undefined;
+    addShifts(dates.map(day => ({ title: title.trim(), site: site.trim(), location: location.trim(), ...(pin ?? {}), seriesId, date: day, start, end, team: workers.find(w => w.id === selected[0])?.team ?? 'General', workerIds: selected })));
     router.replace('/schedule');
   };
   if (role !== 'admin') return <Screen back title="Admin only"><Text>This action requires an admin account.</Text></Screen>;
