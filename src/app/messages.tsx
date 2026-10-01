@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { Send } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { View, TextInput, ScrollView, Platform, KeyboardAvoidingView } from 'react-native';
 import { Pressable } from '../ui/LocalizedPressable';
 import { Text } from '../ui/LocalizedText';
@@ -13,6 +13,7 @@ export default function Messages() {
   const { messages, sendMessage, markMessageRead, role, selectedWorkerId, workers, workspaceName } = useStore();
   const [text, setText] = useState('');
   const [target, setTarget] = useState<string>('all');
+  const scrollRef = useRef<ScrollView>(null);
   
   const relevantMessages = messages.filter(m => {
     if (target === 'all') return m.to === 'all';
@@ -45,7 +46,7 @@ export default function Messages() {
   }, [relevantMessages, role, selectedWorkerId, markMessageRead]);
 
   return <Screen back noScroll title="Messages" subtitle="Chat with your team">
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0} style={{ flex: 1 }}>
       <View style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
@@ -66,7 +67,14 @@ export default function Messages() {
           )}
         </View>
 
-        <ScrollView style={{ flex: 1, marginBottom: 16 }} contentContainerStyle={{ paddingBottom: 20 }}>
+        <ScrollView 
+          ref={scrollRef}
+          showsVerticalScrollIndicator={false}
+          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+          onLayout={() => scrollRef.current?.scrollToEnd({ animated: false })}
+          style={{ flex: 1, marginBottom: 16 }} 
+          contentContainerStyle={{ paddingBottom: 20 }}
+        >
           {relevantMessages.length === 0 ? (
             <Text style={{ color: C.muted, textAlign: 'center', marginTop: 40 }}>No messages yet.</Text>
           ) : (
