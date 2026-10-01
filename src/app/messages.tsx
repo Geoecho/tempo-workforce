@@ -14,11 +14,13 @@ export default function Messages() {
   const [text, setText] = useState('');
   const [target, setTarget] = useState<string>('all');
   
-  const relevantMessages = messages.filter(m => 
-    role === 'admin' 
-      ? (target === 'all' ? m.to === 'all' : m.to === target || m.from === target)
-      : (m.to === 'all' || m.to === selectedWorkerId || m.from === selectedWorkerId)
-  ).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const relevantMessages = messages.filter(m => {
+    if (role === 'admin') {
+      if (target === 'all') return true;
+      return m.to === target || m.from === target || m.to === 'all';
+    }
+    return m.to === 'all' || m.to === selectedWorkerId || m.from === selectedWorkerId;
+  }).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
   const send = async () => {
     if (!text.trim()) return;

@@ -28,8 +28,7 @@ function AppContent() {
   // Sync Android nav bar / iOS home-indicator background with active theme
   useEffect(() => { void SystemUI.setBackgroundColorAsync(C.bg); }, [C.bg]);
   const statusBar = <StatusBar style={pathname === '/welcome' ? 'dark' : scheme === 'dark' ? 'light' : 'dark'} />;
-  if (pathname === '/welcome' || pathname === '/start') return <>{statusBar}<AppStack /></>;
-  return <StoreProvider>{statusBar}<AppStack /><ShiftReminders /><WatchSync /></StoreProvider>;
+  return <StoreProvider>{statusBar}<AppStack />{pathname !== '/welcome' && pathname !== '/start' && <><ShiftReminders /><WatchSync /></>}</StoreProvider>;
 }
 
 export default function Layout() { return <SafeAreaProvider><ThemeProvider><LanguageProvider><FeedbackProvider><WebBrandHead /><AppContent /></FeedbackProvider></LanguageProvider></ThemeProvider></SafeAreaProvider>; }
