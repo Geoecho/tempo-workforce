@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Download, Plus } from 'lucide-react-native';
+import { Download } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { Platform, Share, View } from 'react-native';
 import { Pressable } from '../ui/LocalizedPressable';
@@ -60,10 +60,9 @@ export default function Schedule() {
     </View>}
     {filter !== 'calendar' && <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 13 }}>
       <Text style={{ color: C.ink, fontSize: 16, fontWeight: '500' }}>{filtered.length} {t('Shifts').toLowerCase()}</Text>
-      {filter === 'history' ? !!filtered.length && <Button label="Export CSV" small variant="outline" icon={<Download size={16} color={C.green} />} onPress={() => void exportHistory()} /> : role === 'admin' && <Button label="New shift" small icon={<Plus size={16} color={C.onGreen} />} onPress={() => router.push('/new-shift')} />}
+      {filter === 'history' ? !!filtered.length && <Button label="Export CSV" small variant="outline" icon={<Download size={16} color={C.green} />} onPress={() => void exportHistory()} /> : null}
     </View>}
-    {filter === 'calendar' && role === 'admin' && <View style={{ alignItems: 'flex-end', marginBottom: 12 }}><Button label="New shift" small icon={<Plus size={16} color={C.onGreen} />} onPress={() => router.push('/new-shift')} /></View>}
-    {filter === 'calendar' ? <CalendarView shifts={filtered} /> : filter === 'history' ? (filtered.length ? <ContentGrid>{filtered.map(shift => <ShiftCard key={shift.id} shift={shift} history />)}</ContentGrid> : <Empty title="No shift history yet" detail="Finished shifts and their clock records will appear here." />)
+        {filter === 'calendar' ? <CalendarView shifts={filtered} /> : filter === 'history' ? (filtered.length ? <ContentGrid>{filtered.map(shift => <ShiftCard key={shift.id} shift={shift} history />)}</ContentGrid> : <Empty title="No shift history yet" detail="Finished shifts and their clock records will appear here." />)
       : dayGroups.length ? dayGroups.map(group => <View key={group.date} style={{ marginBottom: 8 }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 6, marginBottom: 10 }}><Text style={{ color: C.ink, fontSize: 15, fontWeight: '600' }}>{dayLabel(group.date)}</Text><Text style={{ color: C.muted, fontSize: 12 }}>{group.shifts.length} {t('Shifts').toLowerCase()}</Text></View>
         <ContentGrid>{group.shifts.map(shift => <ShiftCard key={shift.id} shift={shift} compact />)}</ContentGrid>

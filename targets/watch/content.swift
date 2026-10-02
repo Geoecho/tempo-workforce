@@ -1,5 +1,6 @@
 import SwiftUI
 import WatchConnectivity
+import WatchKit
 
 final class TempoWatchModel: NSObject, ObservableObject, WCSessionDelegate {
     @Published var status = "waiting"
@@ -54,44 +55,41 @@ final class TempoWatchModel: NSObject, ObservableObject, WCSessionDelegate {
 struct ContentView: View {
     @StateObject private var model = TempoWatchModel()
     private let mint = Color(red: 0.84, green: 0.89, blue: 0.80)
+    // 184pt is the 44mm reference width; everything scales from the real screen.
+    private var k: CGFloat { min(1.2, max(0.78, WKInterfaceDevice.current().screenBounds.width / 184)) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                HStack(spacing: 6) {
-                    HStack(spacing: 2) {
-                        Capsule().frame(width: 4, height: 10)
-                        Capsule().frame(width: 4, height: 18)
-                        Capsule().frame(width: 4, height: 14)
-                    }.rotationEffect(.degrees(-22))
-                    Text("tempo").font(.system(size: 18, weight: .medium))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 6 * k) {
+                HStack {
+                    Text("tempo").font(.system(size: 16 * k, weight: .medium))
+                    Spacer()
+                    Circle().fill(model.status == "onShift" || model.status == "onBreak" ? mint : .gray).frame(width: 7 * k, height: 7 * k)
                 }
-                Spacer()
-                Circle().fill(model.status == "onShift" || model.status == "onBreak" ? mint : .gray).frame(width: 7, height: 7)
+                Text(model.status == "onBreak" ? "ON PAID BREAK" : model.status == "onShift" ? "ON SHIFT" : model.status == "complete" ? "SHIFT COMPLETE" : model.status == "upcoming" ? "NEXT SHIFT" : "WORKER STATUS")
+                    .font(.system(size: 10 * k, weight: .bold, design: .rounded))
+                    .tracking(1.0).foregroundStyle(mint)
+                Text(model.time.isEmpty ? model.title : model.time)
+                    .font(.system(size: (model.time.isEmpty ? 17 : 28) * k, weight: .bold, design: .rounded))
+                    .minimumScaleFactor(0.6).lineLimit(2)
+                if !model.time.isEmpty {
+                    Text(model.title).font(.system(size: 13 * k, weight: .semibold)).lineLimit(2)
+                }
+                if !model.site.isEmpty {
+                    Text(model.site).font(.system(size: 11 * k)).foregroundStyle(.secondary).lineLimit(2)
+                }
+                Button(action: model.requestScanner) {
+                    Label("Scan on iPhone", systemImage: "qrcode.viewfinder")
+                        .font(.system(size: 12 * k, weight: .bold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(mint)
+                .padding(.top, 4 * k)
+                Text(model.note).font(.system(size: 10 * k)).foregroundStyle(.secondary).lineLimit(3)
             }
-            Spacer(minLength: 2)
-            Text(model.status == "onBreak" ? "ON PAID BREAK" : model.status == "onShift" ? "ON SHIFT" : model.status == "complete" ? "SHIFT COMPLETE" : model.status == "upcoming" ? "NEXT SHIFT" : "WORKER STATUS")
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .tracking(1.2).foregroundStyle(mint)
-            Text(model.time.isEmpty ? model.title : model.time)
-                .font(.system(size: model.time.isEmpty ? 18 : 31, weight: .bold, design: .rounded))
-                .minimumScaleFactor(0.7).lineLimit(2)
-            if !model.time.isEmpty {
-                Text(model.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-            }
-            Text(model.site).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
-            Spacer(minLength: 2)
-            Button(action: model.requestScanner) {
-                Label("Scan on iPhone", systemImage: "qrcode.viewfinder")
-                    .font(.system(size: 12, weight: .bold))
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(mint)
-            Text(model.note).font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(2)
+            .padding(.horizontal, 4)
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 5)
         .background(Color(red: 0.035, green: 0.075, blue: 0.055))
     }
 }

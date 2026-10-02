@@ -44,11 +44,11 @@ export function WatchSync() {
       const subscription = WatchConnectivity.addMessageListener(({ message, replyId }) => {
         if (message.action !== 'openScanner') return;
         const reply = (text: string) => { if (replyId) WatchConnectivity.replyToMessage(replyId, { message: text }); };
-        if (role !== 'worker') return reply('Sign in as a worker on iPhone');
         if (AppState.currentState === 'active') {
-          router.push('/scan');
+          router.push(role === 'worker' ? '/scan' : '/scan-worker');
           return reply('Scanner opened on iPhone');
         }
+        if (role !== 'worker') return reply('Open Tempo on iPhone');
         void Notifications.scheduleNotificationAsync({
           content: { title: 'Scan your site code', body: 'Tap to open the Tempo scanner on iPhone.', data: { kind: WATCH_SCAN_NOTIFICATION }, sound: false },
           trigger: null,

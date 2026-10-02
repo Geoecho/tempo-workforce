@@ -100,7 +100,7 @@ export function ShiftRoles({ shiftId, workerIds, workers, admin, currency, viewe
   return <><Section title="Roles for this shift" /><Card style={{ padding: 0, overflow: 'hidden' }}>{rows.map((r, i) => <View key={r.id} style={{ padding: 14, borderTopWidth: i ? 1 : 0, borderTopColor: C.line, gap: 8 }}>
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
       <Text style={{ flex: 1, color: C.ink, fontWeight: '500', fontSize: 14 }}>{r.name}{r.a.overridden ? '  · changed for this shift' : ''}</Text>
-      {admin && <Pressable accessibilityRole="button" onPress={() => setEditing(editing === r.id ? null : r.id)}><Text style={{ color: C.green, fontSize: 12, fontWeight: '500' }}>{editing === r.id ? 'Done' : 'Edit'}</Text></Pressable>}
+      {admin && <Pressable accessibilityRole="button" hitSlop={8} onPress={() => setEditing(editing === r.id ? null : r.id)} style={{ alignSelf: 'flex-start', minHeight: 40, paddingHorizontal: 18, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.mint, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: C.green, fontSize: 14, fontWeight: '500' }}>{editing === r.id ? 'Done' : 'Edit'}</Text></Pressable>}
     </View>
     {r.a.roles.length ? <RoleChips roles={r.a.roles} currency={currency} /> : <Text style={{ color: C.muted, fontSize: 12 }}>No role tags</Text>}
     {!!r.a.details && <Text style={{ color: C.muted, fontSize: 12 }}>{r.a.details}</Text>}

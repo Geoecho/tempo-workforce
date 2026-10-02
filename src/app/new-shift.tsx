@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { Pressable } from '../ui/LocalizedPressable';
@@ -32,8 +32,10 @@ export default function NewShift() {
   const [site, setSite] = useState('');
   const [location, setLocation] = useState('');
   const [pin, setPin] = useState<SitePin | null>(null);
-  const [date, setDate] = useState(today());
-  const [until, setUntil] = useState(() => defaultRepeatUntil(today()));
+  const params = useLocalSearchParams<{ date?: string }>();
+  const initial = typeof params.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : today();
+  const [date, setDate] = useState(initial);
+  const [until, setUntil] = useState(() => defaultRepeatUntil(initial));
   const [repeat, setRepeat] = useState<ShiftRepeat>('once');
   const [start, setStart] = useState('09:00');
   const [end, setEnd] = useState('17:00');

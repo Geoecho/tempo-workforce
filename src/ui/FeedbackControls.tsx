@@ -1,11 +1,11 @@
-import { router } from 'expo-router';
-import { BellRing, Smartphone, Volume2, Watch } from 'lucide-react-native';
+
+import { BellRing, Smartphone, Volume2 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { Linking, Platform, Switch, View } from 'react-native';
 import { Pressable } from './LocalizedPressable';
 import { Text } from './LocalizedText';
 import { useFeedback } from '../lib/feedback';
-import { Button, Card, Section } from './components';
+import { Card, Section } from './components';
 import { useTheme } from './theme';
 
 function SettingRow({ icon, title, detail, value, onChange, disabled = false }: {
@@ -33,7 +33,5 @@ export function FeedbackControls({ worker }: { worker: boolean }) {
       {worker && <><View style={{ height: 1, backgroundColor: C.line }} /><SettingRow icon={<BellRing size={18} color={C.green} />} title="Shift reminders" detail={Platform.OS === 'web' ? 'Available in the iOS and Android app.' : 'A quiet reminder one hour before each shift.'} value={reminders} disabled={Platform.OS === 'web'} onChange={value => { void setReminders(value).then(ok => { setMessage(ok ? '' : 'Notifications are off for Tempo in your phone settings.'); }); }} /></>}
       {!!message && <Pressable accessibilityRole="button" onPress={() => void Linking.openSettings()} style={{ paddingBottom: 12 }}><Text style={{ color: C.red, fontSize: 12, lineHeight: 18 }}>{message} Open settings</Text></Pressable>}
     </Card>
-    <Section title="Apple Watch" />
-    <Card><View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}><View style={{ width: 43, height: 43, borderRadius: 14, backgroundColor: C.mint, alignItems: 'center', justifyContent: 'center' }}><Watch size={23} color={C.green} /></View><View style={{ flex: 1 }}><Text style={{ color: C.ink, fontWeight: '500', fontSize: 14 }}>Worker watch preview</Text><Text style={{ color: C.muted, fontSize: 11, lineHeight: 17, marginTop: 3 }}>Explore next shift and status layouts. Scanning stays on iPhone.</Text></View></View><View style={{ marginTop: 15 }}><Button label="Explore watch design" variant="light" onPress={() => router.push('/watch-preview')} /></View></Card>
   </>;
 }

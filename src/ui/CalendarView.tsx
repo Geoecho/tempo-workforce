@@ -1,16 +1,19 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
 import { View } from 'react-native';
+import { router } from 'expo-router';
+import { useStore } from '../lib/store';
 import { Pressable } from './LocalizedPressable';
 import { Text } from './LocalizedText';
 import { localDate, Shift, today } from '../lib/data';
 import { useLanguage } from '../lib/i18n';
-import { Card, Empty } from './components';
+import { Button, Card, Empty } from './components';
 import { ShiftCard } from './ShiftCard';
 import { useTheme } from './theme';
 
 export function CalendarView({ shifts }: { shifts: Shift[] }) {
   const C = useTheme().colors;
+  const { role } = useStore();
   const { language } = useLanguage();
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [selected, setSelected] = useState(today());
@@ -44,6 +47,7 @@ export function CalendarView({ shifts }: { shifts: Shift[] }) {
       </View>)}
     </Card>
     <Text style={{ color: C.ink, fontSize: 16, fontWeight: '500', marginTop: 20, marginBottom: 12 }}>{new Date(`${selected}T12:00:00`).toLocaleDateString(language, { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
+    {role === 'admin' && selected >= today() && <View style={{ marginBottom: 12 }}><Button label="Add shift on this day" small icon={<Plus size={16} color={C.onGreen} />} onPress={() => router.push({ pathname: '/new-shift', params: { date: selected } })} /></View>}
     {dayShifts.length ? dayShifts.map(s => <ShiftCard key={s.id} shift={s} compact />) : <Empty title="Nothing scheduled" detail="No shifts on this day." />}
   </View>;
 }

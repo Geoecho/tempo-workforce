@@ -6,7 +6,7 @@ import { Text, TextInput } from '../ui/LocalizedText';
 import { CURRENCIES, initialState } from '../lib/data';
 import { useStore } from '../lib/store';
 import { LANGUAGES, useLanguage } from '../lib/i18n';
-import { Avatar, Card, Screen, Section, SelectionMark } from '../ui/components';
+import { Avatar, Button, Card, Screen, Section, SelectionMark } from '../ui/components';
 import { FeedbackControls } from '../ui/FeedbackControls';
 import { ThemePreference, useTheme } from '../ui/theme';
 
@@ -46,12 +46,12 @@ export default function Settings() {
     <FeedbackControls worker={role === 'worker'} />
     </View>
     <View style={{ flex: desktop ? 1 : undefined, width: desktop ? undefined : '100%', minWidth: 0 }}>
-    {online && role === 'admin' && <><Section title="Workspace name" /><Card><TextInput accessibilityLabel={t('Workspace name')} value={name} onChangeText={setName} placeholder={t('Your organization')} placeholderTextColor={C.placeholder} style={{ borderWidth: 1, borderColor: C.line, borderRadius: 11, padding: 12, color: C.ink, backgroundColor: C.surface }} /><Pressable accessibilityRole="button" onPress={() => setWorkspaceName(name)} style={{ alignSelf: 'flex-start', marginTop: 12, paddingVertical: 5 }}><Text style={{ color: C.green, fontWeight: '500' }}>{t('Save name')}</Text></Pressable></Card></>}
+    {online && role === 'admin' && <><Section title="Workspace name" /><Card><TextInput accessibilityLabel={t('Workspace name')} value={name} onChangeText={setName} placeholder={t('Your organization')} placeholderTextColor={C.placeholder} style={{ borderWidth: 1, borderColor: C.line, borderRadius: 11, padding: 12, color: C.ink, backgroundColor: C.surface }} /><View style={{ marginTop: 12 }}><Button label="Save name" onPress={() => setWorkspaceName(name)} /></View></Card></>}
     {online && <><Section title="Online account" /><Card>
       <Text style={{ color: C.ink, fontWeight: '500' }}>{accountEmail}</Text>
       <Text style={{ color: C.muted, marginTop: 7, fontSize: 12 }}>{t('Changes sync between signed-in devices.')}</Text>
       {syncError && <Text style={{ color: C.red, marginTop: 10, fontSize: 12 }}>Sync error: {syncError}</Text>}
-      <Pressable onPress={() => void signOut()} style={{ marginTop: 15 }}><Text style={{ color: C.red, fontWeight: '500' }}>{t('Sign out')}</Text></Pressable>
+      <Pressable accessibilityRole="button" onPress={() => void signOut()} style={{ marginTop: 15, minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: C.red, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: C.red, fontWeight: '500', fontSize: 15 }}>{t('Sign out')}</Text></Pressable>
     </Card></>}
     {online && role === 'admin' && <><Section title="Invite a worker" /><Card>
       <Text style={{ color: C.muted, fontSize: 12, marginBottom: 12 }}>Choose a worker profile, then save the email they will use to create an account.</Text>
