@@ -1,3 +1,4 @@
+import * as Notifications from './notifications';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -75,16 +76,30 @@ export function WatchSync() {
   }, [ready, lastPunch?.id]);
 
   useEffect(() => {
-    if (!ready) { setDebug('Watch: app still loading'); return; }
-    if (Platform.OS !== 'ios') { setDebug('Watch: iOS only'); return; }
-    if (Constants.executionEnvironment === 'storeClient') { setDebug('Watch: not available in Expo Go'); return; }
+    if (!ready) return setDebug('Watch: app still loading');
+    if (Platform.OS !== 'ios') return setDebug('Watch: iOS only');
+    if (Constants.executionEnvironment === 'storeClient') return setDebug('Watch: not available in Expo Go');
     let cancelled = false;
     let removeListener: (() => void) | undefined;
-    void import('@plevo/expo-watch-connectivity').then(async ({ WatchConnectivity }) => {
-      if (!WatchConnectivity.isSupported) return;
-      const Notifications = await import('expo-notifications');
+    void (async () => {
+      const { requireNativeModule } = await import('expo-modules-core');
+      const native: any = requireNativeModule('ExpoWatchConnectivity');
+      if (!native) throw new Error('native module ExpoWatchConnectivity missing from this build');
+      const WatchConnectivity = {
+        get isSupported(): boolean { return native.isSupported(); },
+        get sessionState(): any { return native.getSessionState(); },
+        activate: () => native.activate(),
+        updateApplicationContext: (c: Record<string, unknown>) => native.updateApplicationContext(c),
+        transferUserInfo: (c: Record<string, unknown>) => native.transferUserInfo(c),
+        sendMessage: (c: Record<string, unknown>) => native.sendMessage(c),
+        replyToMessage: (id: string, r: Record<string, unknown>) => native.replyToMessage(id, r),
+        addActivationListener: (cb: (e: { activationState: string }) => void) => native.addListener('onActivationDidComplete', cb),
+        addMessageListener: (cb: (e: { message: Record<string, unknown>; replyId?: string }) => void) => native.addListener('onMessageReceived', cb),
+      };
+      if (!WatchConnectivity.isSupported) return setDebug('Watch: not supported on this device');
+      setDebug('Watch: module loaded, activating');
       let lastInfo = '';
-      const report = (extra: string) => { try { const st = WatchConnectivity.sessionState as any; setDebug('Watch: ' + st.activationState + ', paired ' + st.isPaired + ', app installed ' + st.isWatchAppInstalled + ', reachable ' + st.isReachable + (extra ? ' · ' + extra : '')); } catch (e) { setDebug('Watch: state error ' + String(e)); } };
+      const report = (extra: string) => { try { const st = WatchConnectivity.sessionState as any; setDebug(`Watch: ${st.activationState}, paired ${st.isPaired}, app installed ${st.isWatchAppInstalled}, reachable ${st.isReachable}${extra ? ' · ' + extra : ''}`); } catch (e) { setDebug('Watch: state error ' + String(e)); } };
       const publish = () => {
         report('');
         if (!cancelled && WatchConnectivity.sessionState.activationState === 'activated') {
@@ -122,7 +137,7 @@ export function WatchSync() {
       removeListener = () => { sendEvent.current = null; activation.remove(); subscription.remove(); clearInterval(timer); };
       await WatchConnectivity.activate();
       publish();
-    }).catch((e: unknown) => { console.warn('[watch] unavailable', e); setDebug('Watch: module error ' + String((e as Error)?.message ?? e)); });
+    })().catch(e => { console.warn('[watch] unavailable', e); setDebug('Watch: module error ' + String((e as Error)?.message ?? e)); });
     return () => { cancelled = true; removeListener?.(); };
   }, [ready, role, key]);
   return null;

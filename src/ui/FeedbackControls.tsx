@@ -5,7 +5,6 @@ import React, { useState } from 'react';
 import { Linking, Platform, Switch, View } from 'react-native';
 import { Pressable } from './LocalizedPressable';
 import { Text } from './LocalizedText';
-import { notificationsSupported } from '../lib/notification-support';
 import { useFeedback } from '../lib/feedback';
 import { Card, Section } from './components';
 import { useTheme } from './theme';
@@ -33,7 +32,7 @@ export function FeedbackControls({ worker }: { worker: boolean }) {
       <View style={{ height: 1, backgroundColor: C.line }} />
       <SettingRow icon={<Volume2 size={18} color={C.green} />} title="Confirmation sounds" detail="Soft tones for successful or failed scans. Respects Silent Mode." value={sounds} onChange={setSounds} />
       {sounds && <Pressable accessibilityRole="button" onPress={() => play('confirm')} style={{ alignSelf: 'flex-start', paddingVertical: 7, paddingHorizontal: 48 }}><Text style={{ color: C.green, fontSize: 12, fontWeight: '500' }}>Play sample</Text></Pressable>}
-      {worker && <><View style={{ height: 1, backgroundColor: C.line }} /><SettingRow icon={<BellRing size={18} color={C.green} />} title="Shift reminders" detail={Platform.OS === 'web' ? 'Available in the iOS and Android app.' : !notificationsSupported ? 'Use a Tempo development build for device reminders. In-app updates remain available.' : 'A quiet reminder one hour before each shift.'} value={notificationsSupported && reminders} disabled={!notificationsSupported} onChange={value => { void setReminders(value).then(ok => { setMessage(ok ? '' : 'Notifications are off for Tempo in your phone settings.'); }); }} /></>}
+      {worker && <><View style={{ height: 1, backgroundColor: C.line }} /><SettingRow icon={<BellRing size={18} color={C.green} />} title="Shift reminders" detail={Platform.OS === 'web' ? 'Available in the iOS and Android app.' : 'A quiet reminder one hour before each shift.'} value={reminders} disabled={Platform.OS === 'web'} onChange={value => { void setReminders(value).then(ok => { setMessage(ok ? '' : 'Notifications are off for Tempo in your phone settings.'); }); }} /></>}
       {!!message && <Pressable accessibilityRole="button" onPress={() => void Linking.openSettings()} style={{ paddingBottom: 12 }}><Text style={{ color: C.red, fontSize: 12, lineHeight: 18 }}>{message} Open settings</Text></Pressable>}
     </Card>
     <Text style={{ color: C.muted, fontSize: 11, lineHeight: 16, marginTop: 10 }}>{watchDebug}</Text>

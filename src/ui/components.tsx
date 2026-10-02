@@ -1,5 +1,5 @@
 import { router, usePathname } from 'expo-router';
-import { Check, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react-native';
+import { Check, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import React, { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Animated, Image, Keyboard, Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Pressable } from './LocalizedPressable';
@@ -12,7 +12,6 @@ import { useLanguage } from '../lib/i18n';
 import { AppIcon, AppIconName } from './AppIcon';
 import { ThemeColors, useTheme } from './theme';
 import { BrandLogo } from './Brand';
-import { KeyboardFrame } from './KeyboardFrame';
 
 let pendingTabTransition: { href: string; direction: 1 | -1 } | null = null;
 let desktopSidebarCollapsed = false;
@@ -31,7 +30,7 @@ export function Button({ label, onPress, icon, variant = 'primary', small = fals
   const [scale] = useState(() => new Animated.Value(1));
   const [iconMotion] = useState(() => new Animated.Value(0));
   const [reduced, setReduced] = useState(false);
-  useEffect(() => { AccessibilityInfo.isReduceMotionEnabled().then(setReduced).catch(() => { }); }, []);
+  useEffect(() => { AccessibilityInfo.isReduceMotionEnabled().then(setReduced).catch(() => {}); }, []);
   const animate = (pressed: boolean) => {
     if (reduced) return;
     Animated.spring(scale, { toValue: pressed ? .97 : 1, speed: 28, bounciness: 5, useNativeDriver: Platform.OS !== 'web' }).start();
@@ -42,16 +41,29 @@ export function Button({ label, onPress, icon, variant = 'primary', small = fals
 }
 export function Card({ children, style }: { children: React.ReactNode; style?: object }) { const styles = useStyles(); return <View style={[styles.card, style]}>{children}</View>; }
 export function Section({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) { const styles = useStyles(); const { t } = useLanguage(); return <View style={styles.section}><Text style={styles.sectionTitle}>{t(title)}</Text>{action && <Pressable onPress={onAction}><Text style={styles.sectionAction}>{t(action)}</Text></Pressable>}</View>; }
-export function Screen({ children, title, subtitle, back = false, action, noNav = false, noScroll = false, wide = false, chat = false }: { children?: React.ReactNode; title?: string; subtitle?: string; back?: boolean; action?: React.ReactNode; noNav?: boolean; noScroll?: boolean; wide?: boolean; chat?: boolean }) {
+export function Screen({ children, title, subtitle, back = false, action, noNav = false, noScroll = false, wide = false }: { children?: React.ReactNode; title?: string; subtitle?: string; back?: boolean; action?: React.ReactNode; noNav?: boolean; noScroll?: boolean; wide?: boolean }) {
   const C = useTheme().colors;
   const styles = useStyles();
-  const { role, workers, selectedWorkerId, workspaceName, accountEmail, notifications, messages, syncError } = useStore();
+  const { role, workers, selectedWorkerId, workspaceName, accountEmail, notifications } = useStore();
   const { t } = useLanguage();
   const path = usePathname();
   const { width } = useWindowDimensions();
   const desktop = Platform.OS === 'web' && width >= 960;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(desktopSidebarCollapsed);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [entrance] = useState(() => new Animated.Value(0));
+  const [direction] = useState(() => !desktop && pendingTabTransition?.href === path ? pendingTabTransition.direction : 0);
+  const [slideX] = useState(() => new Animated.Value(direction * 28));
+  useEffect(() => {
+    if (pendingTabTransition?.href === path) pendingTabTransition = null;
+    AccessibilityInfo.isReduceMotionEnabled().then(reduced => {
+      if (reduced) { entrance.setValue(1); slideX.setValue(0); return; }
+      Animated.parallel([
+        Animated.timing(entrance, { toValue: 1, duration: 240, useNativeDriver: Platform.OS !== 'web' }),
+        Animated.timing(slideX, { toValue: 0, duration: 240, useNativeDriver: Platform.OS !== 'web' }),
+      ]).start();
+    }).catch(() => { entrance.setValue(1); slideX.setValue(0); });
+  }, [entrance, slideX, path]);
   useEffect(() => {
     const shown = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardOpen(true));
     const hidden = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardOpen(false));
@@ -61,30 +73,24 @@ export function Screen({ children, title, subtitle, back = false, action, noNav 
   const profile = workers.find(worker => worker.id === selectedWorkerId && !worker.archived);
   const initials = role === 'worker' && profile ? profile.initials : (accountEmail?.slice(0, 1) || workspaceName?.slice(0, 1) || 'T').toUpperCase();
   const unread = notifications.filter(item => !item.readAt).length;
-  const unreadMessages = messages?.filter(m => m.readAt === null && m.to !== 'all' && m.from !== (role === 'admin' ? 'admin' : selectedWorkerId)).length || 0;
 
   const topbar = <View style={[styles.topbar, desktop && styles.desktopTopbar]}>
-    {back && <Pressable accessibilityLabel="Go back" onPress={() => router.canGoBack() ? router.back() : router.replace('/')} style={styles.topIcon}><ChevronLeft size={23} color={C.ink} /></Pressable>}
+    {back && <Pressable accessibilityLabel="Go back" onPress={() => router.back()} style={styles.topIcon}><ChevronLeft size={23} color={C.ink} /></Pressable>}
     <View style={{ flex: 1, alignItems: 'flex-start' }}>
-      {desktop ? title && <><Text style={[styles.title, { fontSize: 28 }]}>{t(title)}</Text>{subtitle && <Text style={styles.subtitle}>{t(subtitle)}</Text>}</> : chat || back ? <Text style={{ color: C.ink, fontSize: 19, fontWeight: '600' }}>{chat ? 'Messages' : title}</Text> : <BrandLogo size={24} />}
+      {desktop ? title && <><Text style={[styles.title, { fontSize: 28 }]}>{t(title)}</Text>{subtitle && <Text style={styles.subtitle}>{t(subtitle)}</Text>}</> : <BrandLogo size={24} />}
     </View>
     {action}
-    <Pressable accessibilityRole="button" accessibilityLabel="Messages" disabled={path === '/messages'} onPress={() => router.push('/messages')} style={styles.headerButton}>
-      <MessageCircle size={20} color={C.green} />
-      {unreadMessages > 0 && <View style={{ position: 'absolute', top: -4, right: -5, minWidth: 19, paddingHorizontal: 4, height: 19, borderRadius: 7, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: C.onGreen, fontSize: 10, fontWeight: '600' }}>{unreadMessages > 99 ? '99+' : unreadMessages}</Text></View>}
-    </Pressable>
-    {<Pressable accessibilityRole="button" accessibilityLabel={`${unread} unread notifications`} disabled={path === '/notifications'} onPress={() => router.push('/notifications')} style={styles.headerButton}><AppIcon name="bell" size={21} color={C.green} playing={false} />{unread > 0 && <View style={{ position: 'absolute', top: -4, right: -5, minWidth: 19, paddingHorizontal: 4, height: 19, borderRadius: 7, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: C.onGreen, fontSize: 10, fontWeight: '600' }}>{unread > 99 ? '99+' : unread}</Text></View>}</Pressable>}
+    {<Pressable accessibilityRole="button" accessibilityLabel={`${unread} unread notifications`} onPress={() => router.push('/notifications')} style={styles.headerButton}><AppIcon name="bell" size={21} color={C.green} playing={false} />{unread > 0 && <View style={styles.unreadDot} />}</Pressable>}
     <Pressable accessibilityRole="button" accessibilityLabel={path === '/settings' ? 'Profile and settings open' : 'Open profile and settings'} accessibilityState={{ disabled: path === '/settings' }} disabled={path === '/settings'} onPress={() => router.push('/settings')} style={[styles.headerProfile, { overflow: 'hidden' }]}>{role === 'worker' && profile?.photoUri ? <Image source={{ uri: profile.photoUri }} style={{ width: 39, height: 39 }} /> : <Text style={styles.headerInitials}>{initials}</Text>}</Pressable>
   </View>;
-  const Inner = <View style={{ flex: noScroll ? 1 : undefined, minHeight: 0 }}>
-    {!desktop && !chat && title && !back && <View style={styles.pageHeading}><Text style={styles.title}>{t(title)}</Text>{subtitle && <Text style={styles.subtitle}>{t(subtitle)}</Text>}</View>}
-    {!!syncError && <View accessibilityRole="alert" style={{ padding: 10, marginBottom: 12, borderRadius: 10, backgroundColor: C.dangerSurface }}><Text style={{ color: C.red, fontSize: 12 }}>Changes could not sync. Check your connection and try again.</Text></View>}
+  const Inner = <Animated.View style={{ flex: noScroll ? 1 : undefined, opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [direction ? 0 : 10, 0] }) }, { translateX: slideX }] }}>
+    {!desktop && title && <View style={styles.pageHeading}><Text style={styles.title}>{t(title)}</Text>{subtitle && <Text style={styles.subtitle}>{t(subtitle)}</Text>}</View>}
     {children}
-  </View>;
-  const bodyStyles = [styles.body, desktop && styles.desktopBody, desktop && wide && styles.desktopWideBody, desktop && !wide && back && styles.desktopFocusedBody, chat && { paddingTop: desktop ? 16 : 12, paddingBottom: 0 }];
-  const content = noScroll ? <View style={{ flex: 1, backgroundColor: chat && !desktop ? C.surface : C.bg }}><View style={[{ flex: 1, minHeight: 0 }, bodyStyles]}>{Inner}</View></View> : <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={bodyStyles} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>{Inner}</ScrollView>;
+  </Animated.View>;
+  const bodyStyles = [styles.body, desktop && styles.desktopBody, desktop && wide && styles.desktopWideBody, desktop && !wide && back && styles.desktopFocusedBody];
+  const content = noScroll ? <View style={{ flex: 1, backgroundColor: C.bg }}><View style={[{ flex: 1 }, bodyStyles]}>{Inner}</View></View> : <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={bodyStyles} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>{Inner}</ScrollView>;
 
-  return <KeyboardFrame enabled={chat}><SafeAreaView style={[styles.safe, chat && { backgroundColor: desktop ? C.bg : C.surface }]} edges={['top']}>
+  return <SafeAreaView style={styles.safe} edges={desktop || noNav || keyboardOpen ? ['top', 'bottom'] : ['top']}>
     {desktop ? <View style={styles.desktopShell}>
       <BottomNav role={role} desktop collapsed={sidebarCollapsed} onToggleCollapsed={() => {
         const next = !sidebarCollapsed;
@@ -94,15 +100,15 @@ export function Screen({ children, title, subtitle, back = false, action, noNav 
       }} />
       <View style={styles.desktopMain}>{topbar}{content}</View>
     </View> : <>{topbar}{content}{!noNav && !keyboardOpen && <BottomNav role={role} />}</>}
-  </SafeAreaView></KeyboardFrame>;
+  </SafeAreaView>;
 }
 function BottomNav({ role, desktop = false, collapsed = false, onToggleCollapsed }: { role: 'admin' | 'worker'; desktop?: boolean; collapsed?: boolean; onToggleCollapsed?: () => void }) {
-  const insets = useSafeAreaInsets();
   const C = useTheme().colors;
   const styles = useStyles();
   const { play } = useFeedback();
   const { t } = useLanguage();
   const path = usePathname();
+  const insets = useSafeAreaInsets();
   const [hovered, setHovered] = useState<string | null>(null);
   const [activated, setActivated] = useState<string | null>(path);
   const [activationCount, setActivationCount] = useState(0);
@@ -115,7 +121,7 @@ function BottomNav({ role, desktop = false, collapsed = false, onToggleCollapsed
   ] : [
     { href: '/', label: 'Home', icon: 'home' }, { href: '/schedule', label: 'Shifts', icon: 'calendar' }, { href: '/scan', label: 'Scan', icon: 'scan' }, { href: '/time', label: 'Hours', icon: 'time' }, { href: '/settings', label: 'More', icon: 'settings' },
   ];
-  return <View style={desktop ? [styles.sideNav, collapsed && styles.sideNavCollapsed] : [styles.nav, { paddingBottom: insets.bottom, height: 69 + insets.bottom }]}>
+  return <View style={desktop ? [styles.sideNav, collapsed && styles.sideNavCollapsed] : [styles.nav, { height: 69 + insets.bottom, paddingBottom: insets.bottom }]}>
     {desktop && <View style={[styles.sideBrandBox, collapsed && styles.sideBrandBoxCollapsed]}>
       {!collapsed && <BrandLogo size={27} />}
       <Pressable accessibilityRole="button" accessibilityLabel={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onPress={onToggleCollapsed} style={styles.sidebarToggle}>
@@ -124,7 +130,7 @@ function BottomNav({ role, desktop = false, collapsed = false, onToggleCollapsed
     </View>}
     {tabs.map(({ href, label, icon }, index) => {
       const active = path === href || (href === '/schedule' && (path.startsWith('/shift/') || path.startsWith('/edit-shift/') || path === '/new-shift')) || (href === '/team' && (path.startsWith('/worker/') || path === '/new-worker'));
-      return <Pressable key={href} accessibilityRole="tab" accessibilityLabel={t(label)} accessibilityState={{ selected: active }} onHoverIn={() => setHovered(href)} onHoverOut={() => setHovered(null)} onFocus={() => setHovered(href)} onBlur={() => setHovered(null)} onPress={() => { setActivated(href); setActivationCount(value => value + 1); play('select'); if (path !== href) { router.replace(href as never); } }} style={desktop ? [styles.sideNavItem, collapsed && styles.sideNavItemCollapsed, active && styles.sideNavActive] : styles.navItem}>
+      return <Pressable key={href} accessibilityRole="tab" accessibilityLabel={t(label)} accessibilityState={{ selected: active }} onHoverIn={() => setHovered(href)} onHoverOut={() => setHovered(null)} onFocus={() => setHovered(href)} onBlur={() => setHovered(null)} onPress={() => { setActivated(href); setActivationCount(value => value + 1); play('select'); if (path !== href) { const from = tabs.findIndex(tab => path === tab.href || (tab.href === '/schedule' && path.startsWith('/shift/')) || (tab.href === '/team' && path.startsWith('/worker/'))); pendingTabTransition = { href, direction: index > Math.max(from, 0) ? 1 : -1 }; router.replace(href as never); } }} style={desktop ? [styles.sideNavItem, collapsed && styles.sideNavItemCollapsed, active && styles.sideNavActive] : styles.navItem}>
         <View style={desktop ? [styles.sideIcon, collapsed && styles.sideIconCollapsed] : [styles.navIcon, active && styles.navActive]}><AppIcon key={activated === href ? activationCount : 0} name={icon as AppIconName} size={20} color={active ? C.green : C.muted} playing={hovered === href || activated === href} /></View>
         {!desktop || !collapsed ? <Text style={desktop ? [styles.sideLabel, active && styles.sideLabelActive] : [styles.navLabel, active && { color: C.green, fontWeight: '500' }]}>{t(label)}</Text> : null}
       </Pressable>;
@@ -132,27 +138,25 @@ function BottomNav({ role, desktop = false, collapsed = false, onToggleCollapsed
   </View>;
 }
 export function Empty({ title, detail }: { title: string; detail: string }) { const C = useTheme().colors; const { t } = useLanguage(); return <Card style={{ alignItems: 'center', padding: 28 }}><Text style={{ fontSize: 16, fontWeight: '500', color: C.ink }}>{t(title)}</Text><Text style={{ color: C.muted, marginTop: 6, textAlign: 'center', lineHeight: 20 }}>{t(detail)}</Text></Card>; }
-function makeStyles(C: ThemeColors) {
-  return StyleSheet.create({
-    desktopShell: { flex: 1, flexDirection: 'row' },
-    desktopMain: { flex: 1, minWidth: 0 },
-    desktopTopbar: { height: 'auto', minHeight: 100, paddingVertical: 20, paddingHorizontal: 32, backgroundColor: C.bg },
-    desktopBody: { maxWidth: '100%', alignSelf: 'stretch', paddingHorizontal: 32, paddingTop: 24, paddingBottom: 40 },
-    desktopWideBody: { flex: 1, width: '100%', maxWidth: '100%', alignSelf: 'stretch', paddingHorizontal: 30, paddingTop: 18, paddingBottom: 20 },
-    desktopFocusedBody: { maxWidth: 880, paddingTop: 22 },
-    sideNav: { width: 236, backgroundColor: C.nav, borderRightWidth: 1, borderRightColor: C.line, paddingHorizontal: 15, paddingTop: 22 },
-    sideNavCollapsed: { width: 72, paddingHorizontal: 9 },
-    sideBrandBox: { minHeight: 36, paddingHorizontal: 10, marginBottom: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    sideBrandBoxCollapsed: { justifyContent: 'center', paddingHorizontal: 0 },
-    sidebarToggle: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
-    sideNavItem: { height: 47, flexDirection: 'row', alignItems: 'center', borderRadius: 8, paddingHorizontal: 14, marginBottom: 6 },
-    sideNavItemCollapsed: { justifyContent: 'center', paddingHorizontal: 0 },
-    sideNavActive: { backgroundColor: C.mint },
-    sideIcon: { width: 32, alignItems: 'flex-start' },
-    sideIconCollapsed: { width: 'auto', alignItems: 'center' },
-    sideLabel: { fontSize: 13, color: C.muted, fontWeight: '400' },
-    sideLabelActive: { color: C.green, fontWeight: '500' },
-    safe: { flex: 1, backgroundColor: C.surface }, topbar: { height: 66, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', gap: 8, borderBottomWidth: 1, borderBottomColor: C.line, backgroundColor: C.surface }, topIcon: { width: 35, height: 35, justifyContent: 'center', alignItems: 'center' }, headerButton: { width: 39, height: 39, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg }, unreadDot: { position: 'absolute', width: 8, height: 8, borderRadius: 4, right: 7, top: 6, backgroundColor: C.red, borderWidth: 1, borderColor: C.surface }, headerProfile: { width: 39, height: 39, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: C.mint, borderWidth: 1, borderColor: C.line }, headerInitials: { fontSize: 13, fontWeight: '600', color: C.green }, brand: { fontSize: 23, letterSpacing: -1.2, fontWeight: '600', color: C.ink }, body: { paddingHorizontal: 22, paddingTop: 25, paddingBottom: 42, width: '100%', maxWidth: 620, alignSelf: 'center' }, pageHeading: { marginBottom: 23 }, desktopPageHeading: { paddingBottom: 21, marginBottom: 24, borderBottomWidth: 1, borderBottomColor: C.line }, title: { fontSize: 33, fontWeight: '400', color: C.ink, letterSpacing: -.7 }, subtitle: { color: C.muted, marginTop: 6, fontSize: 14, lineHeight: 20 }, card: { borderRadius: 14, padding: 20, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line }, section: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 26, marginBottom: 13 }, sectionTitle: { fontSize: 19, fontWeight: '500', letterSpacing: -.3, color: C.ink }, sectionAction: { fontSize: 13, fontWeight: '500', color: C.green }, button: { minHeight: 49, borderRadius: 10, backgroundColor: C.green, paddingHorizontal: 19, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }, buttonText: { color: C.onGreen, fontWeight: '500', fontSize: 14 }, pill: { alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }, nav: { height: 69, paddingHorizontal: 12, backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.line, flexDirection: 'row', justifyContent: 'space-around' }, navItem: { flex: 1, alignItems: 'center', justifyContent: 'center' }, navIcon: { width: 44, height: 31, borderRadius: 9, alignItems: 'center', justifyContent: 'center' }, navActive: { backgroundColor: C.mint }, navLabel: { marginTop: 2, fontSize: 10, color: C.muted },
-  });
-}
+function makeStyles(C: ThemeColors) { return StyleSheet.create({
+  desktopShell: { flex: 1, flexDirection: 'row' },
+  desktopMain: { flex: 1, minWidth: 0 },
+  desktopTopbar: { height: 'auto', minHeight: 100, paddingVertical: 20, paddingHorizontal: 32, backgroundColor: C.bg },
+  desktopBody: { maxWidth: '100%', alignSelf: 'stretch', paddingHorizontal: 32, paddingTop: 24, paddingBottom: 40 },
+  desktopWideBody: { flex: 1, width: '100%', maxWidth: '100%', alignSelf: 'stretch', paddingHorizontal: 30, paddingTop: 18, paddingBottom: 20 },
+  desktopFocusedBody: { maxWidth: 880, paddingTop: 22 },
+  sideNav: { width: 236, backgroundColor: C.nav, borderRightWidth: 1, borderRightColor: C.line, paddingHorizontal: 15, paddingTop: 22 },
+  sideNavCollapsed: { width: 72, paddingHorizontal: 9 },
+  sideBrandBox: { minHeight: 36, paddingHorizontal: 10, marginBottom: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sideBrandBoxCollapsed: { justifyContent: 'center', paddingHorizontal: 0 },
+  sidebarToggle: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
+  sideNavItem: { height: 47, flexDirection: 'row', alignItems: 'center', borderRadius: 8, paddingHorizontal: 14, marginBottom: 6 },
+  sideNavItemCollapsed: { justifyContent: 'center', paddingHorizontal: 0 },
+  sideNavActive: { backgroundColor: C.mint },
+  sideIcon: { width: 32, alignItems: 'flex-start' },
+  sideIconCollapsed: { width: 'auto', alignItems: 'center' },
+  sideLabel: { fontSize: 13, color: C.muted, fontWeight: '400' },
+  sideLabelActive: { color: C.green, fontWeight: '500' },
+  safe: { flex: 1, backgroundColor: C.surface }, topbar: { height: 66, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', gap: 8, borderBottomWidth: 1, borderBottomColor: C.line, backgroundColor: C.surface }, topIcon: { width: 35, height: 35, justifyContent: 'center', alignItems: 'center' }, headerButton: { width: 39, height: 39, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg }, unreadDot: { position: 'absolute', width: 8, height: 8, borderRadius: 4, right: 7, top: 6, backgroundColor: C.red, borderWidth: 1, borderColor: C.surface }, headerProfile: { width: 39, height: 39, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: C.mint, borderWidth: 1, borderColor: C.line }, headerInitials: { fontSize: 13, fontWeight: '600', color: C.green }, brand: { fontSize: 23, letterSpacing: -1.2, fontWeight: '600', color: C.ink }, body: { paddingHorizontal: 22, paddingTop: 25, paddingBottom: 42, width: '100%', maxWidth: 620, alignSelf: 'center' }, pageHeading: { marginBottom: 23 }, desktopPageHeading: { paddingBottom: 21, marginBottom: 24, borderBottomWidth: 1, borderBottomColor: C.line }, title: { fontSize: 33, fontWeight: '400', color: C.ink, letterSpacing: -.7 }, subtitle: { color: C.muted, marginTop: 6, fontSize: 14, lineHeight: 20 }, card: { borderRadius: 14, padding: 20, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line }, section: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 26, marginBottom: 13 }, sectionTitle: { fontSize: 19, fontWeight: '500', letterSpacing: -.3, color: C.ink }, sectionAction: { fontSize: 13, fontWeight: '500', color: C.green }, button: { minHeight: 49, borderRadius: 10, backgroundColor: C.green, paddingHorizontal: 19, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }, buttonText: { color: C.onGreen, fontWeight: '500', fontSize: 14 }, pill: { alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }, nav: { height: 69, paddingHorizontal: 12, backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.line, flexDirection: 'row', justifyContent: 'space-around' }, navItem: { flex: 1, alignItems: 'center', justifyContent: 'center' }, navIcon: { width: 44, height: 31, borderRadius: 9, alignItems: 'center', justifyContent: 'center' }, navActive: { backgroundColor: C.mint }, navLabel: { marginTop: 2, fontSize: 10, color: C.muted },
+}); }
 function useStyles() { const C = useTheme().colors; return useMemo(() => makeStyles(C), [C]); }

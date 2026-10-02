@@ -69,7 +69,6 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
     setBreaks((breakData as BreakEvent[] | null) ?? []);
     setMessages((msgData as Message[] | null) ?? []);
     setWorkspaceId(snapshot.workspaceId);
-    setSyncError(null);
     return snapshot.state;
   }, []);
 
@@ -275,20 +274,18 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
     addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, setWorkspaceName,
     addShift, addShifts, updateShift, removeShift, restoreShift, scan, toggleBreak, issueQr, markNotificationRead, reviewTime,
     sendMessage: async (to, body) => {
-      const { data, error } = await client.rpc('tempo_send_message', { p_to: to, p_body: body.trim() });
+      const { error } = await client.rpc('tempo_send_message', { p_to: to, p_body: body });
       if (error) return { ok: false, message: error.message };
-      // Server IDs keep realtime refreshes from duplicating sent messages.
+      // Optimistic update — Realtime will sync the full list shortly
       const from = state.role === 'admin' ? 'admin' : state.selectedWorkerId;
-      const id = String(data.id);
-      setMessages(current => current.some(message => message.id === id) ? current : [...current, { id, from, to, body: body.trim(), createdAt: new Date().toISOString(), readAt: null }]);
+      setMessages(current => [...current, { id: Date.now().toString(), from, to, body, createdAt: new Date().toISOString(), readAt: null }]);
       return { ok: true, message: 'Message sent.' };
     },
     markMessageRead: async (id) => {
-      const { error } = await client.rpc('tempo_mark_message_read', { p_id: id });
-      if (error) throw error;
+      await client.rpc('tempo_mark_message_read', { p_id: id });
       setMessages(current => current.map(m => m.id === id ? { ...m, readAt: new Date().toISOString() } : m));
     },
     reset: () => {},
-    inviteWorker, signOut: async () => { const { error } = await client.auth.signOut(); if (error) throw error; },
+    inviteWorker, signOut: async () => { await client.auth.signOut(); },
   }}>{children}</Context.Provider>;
 }
