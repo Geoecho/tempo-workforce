@@ -6,7 +6,7 @@ import { Text, TextInput } from '../ui/LocalizedText';
 import { CURRENCIES, initialState } from '../lib/data';
 import { useStore } from '../lib/store';
 import { LANGUAGES, useLanguage } from '../lib/i18n';
-import { Avatar, Card, Screen, Section, SelectionMark } from '../ui/components';
+import { Avatar, Button, Card, Screen, Section, SelectionMark } from '../ui/components';
 import { FeedbackControls } from '../ui/FeedbackControls';
 import { ThemePreference, useTheme } from '../ui/theme';
 

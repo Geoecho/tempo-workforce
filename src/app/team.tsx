@@ -1,11 +1,11 @@
 import { router } from 'expo-router';
-import { ChevronRight, Phone, Plus, Search, UsersRound } from 'lucide-react-native';
+import { ChevronRight, MessageSquare, Phone, Plus, Search, UsersRound } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { Platform, useWindowDimensions, View } from 'react-native';
 import { Pressable } from '../ui/LocalizedPressable';
 import { Text, TextInput } from '../ui/LocalizedText';
 import { Currency, formatMoney, teamNames, Worker } from '../lib/data';
-import { callWorker } from '../lib/phone';
+import { callWorker, messageWorker } from '../lib/phone';
 import { useStore } from '../lib/store';
 import { useLanguage } from '../lib/i18n';
 import { Avatar, Card, Screen } from '../ui/components';
@@ -88,6 +88,7 @@ function WorkerRow({ worker, shifts, currency, first }: { worker: Worker; shifts
   return <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderTopWidth: first ? 0 : 1, borderTopColor: C.line }}>
     <Pressable onPress={() => router.push({ pathname: '/worker/[id]', params: { id: worker.id } })} style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}><Avatar worker={worker} size={40} /><View style={{ marginLeft: 12, flex: 1 }}><Text style={{ color: C.ink, fontWeight: '500', fontSize: 14 }}>{worker.name}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{worker.role} · {shifts} shifts</Text><Text style={{ color: C.green, fontSize: 11, fontWeight: '500', marginTop: 3 }}>{formatMoney(Math.round(worker.hourlyRate * 100), currency)}/h</Text></View></Pressable>
     {worker.phone && <Pressable accessibilityLabel={`Call ${worker.name}`} onPress={() => callWorker(worker.phone)} style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: C.mint, alignItems: 'center', justifyContent: 'center', marginRight: 5 }}><Phone size={17} color={C.green} /></Pressable>}
+    {worker.phone && <Pressable accessibilityLabel={`Message ${worker.name}`} onPress={() => void messageWorker(worker.phone)} style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: C.mint, alignItems: 'center', justifyContent: 'center', marginRight: 5 }}><MessageSquare size={17} color={C.green} /></Pressable>}
     <Pressable accessibilityLabel={`Open ${worker.name} profile`} onPress={() => router.push({ pathname: '/worker/[id]', params: { id: worker.id } })} style={{ width: 28, height: 36, alignItems: 'center', justifyContent: 'center' }}><ChevronRight size={17} color={C.muted} /></Pressable>
   </View>;
 }

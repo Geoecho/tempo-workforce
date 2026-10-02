@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { Pressable } from '../ui/LocalizedPressable';
@@ -6,7 +6,7 @@ import { Text } from '../ui/LocalizedText';
 import { localDate, repeatShiftDates, ShiftRepeat, today, uid } from '../lib/data';
 import { useFeedback } from '../lib/feedback';
 import { useStore } from '../lib/store';
-import { Avatar, Button, Card, Screen, Section, SelectionMark } from '../ui/components';
+import { Avatar, Button, Card, Screen, SelectionMark } from '../ui/components';
 import { Field } from '../ui/Field';
 import { ShiftDateTimeFields } from '../ui/ShiftDateTimeFields';
 import { SitePinPicker } from '../ui/SitePinPicker';
@@ -32,8 +32,10 @@ export default function NewShift() {
   const [site, setSite] = useState('');
   const [location, setLocation] = useState('');
   const [pin, setPin] = useState<SitePin | null>(null);
-  const [date, setDate] = useState(today());
-  const [until, setUntil] = useState(() => defaultRepeatUntil(today()));
+  const params = useLocalSearchParams<{ date?: string }>();
+  const initial = typeof params.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : today();
+  const [date, setDate] = useState(initial);
+  const [until, setUntil] = useState(() => defaultRepeatUntil(initial));
   const [repeat, setRepeat] = useState<ShiftRepeat>('once');
   const [start, setStart] = useState('09:00');
   const [end, setEnd] = useState('17:00');
@@ -59,10 +61,33 @@ export default function NewShift() {
     router.replace('/schedule');
   };
   if (role !== 'admin') return <Screen back title="Admin only"><Text>This action requires an admin account.</Text></Screen>;
-  return <Screen back noNav title="Create a shift" subtitle="Schedule one day or a month at the same place."><Field label="Shift name" value={title} onChangeText={setTitle} placeholder="e.g. Main stage setup" /><Field label="Site / project" value={site} onChangeText={setSite} placeholder="e.g. Northline Festival" /><Field label="Meeting point" value={location} onChangeText={setLocation} placeholder="e.g. East Gate" /><SitePinPicker pin={pin} onChange={setPin} site={site} location={location} /><ShiftDateTimeFields date={date} onDateChange={changeDate} start={start} onStartChange={setStart} end={end} onEndChange={setEnd} until={repeat === 'once' ? undefined : until} onUntilChange={repeat === 'once' ? undefined : setUntil} />
-    <Text style={{ color: C.ink, fontWeight: '500', fontSize: 13, marginBottom: 8 }}>Repeat</Text>
-    <View style={{ flexDirection: 'row', gap: 7, marginBottom: 8 }}>{([['once', 'One day'], ['daily', 'Every day'], ['weekdays', 'Weekdays']] as const).map(([value, label]) => <Pressable key={value} accessibilityRole="radio" accessibilityState={{ selected: repeat === value }} onPress={() => { play('select'); setRepeat(value); setMessage(''); }} style={{ flex: 1, minHeight: 45, borderRadius: 12, borderWidth: 1, borderColor: repeat === value ? C.green : C.line, backgroundColor: repeat === value ? C.mint : C.surface, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}><Text style={{ color: repeat === value ? C.green : C.muted, fontWeight: '500', fontSize: 12 }}>{label}</Text></Pressable>)}</View>
-    {repeat !== 'once' && <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, marginBottom: 10 }}>{dates.length} separate daily shifts will be created. Each day has its own QR code and clock history. You can change a day later.</Text>}
-    {!workers.some(worker => !worker.archived) && <Card><Text style={{ color: C.muted, marginBottom: 12 }}>Add a team member before scheduling your first shift.</Text><Button label="Add team member" variant="light" onPress={() => router.push('/new-worker')} /></Card>}
-    <Section title="Assign workers" /><Text style={{ color: C.muted, fontSize: 12, marginBottom: 11 }}>{selected.length} selected</Text><Card style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}>{workers.filter(w => !w.archived).map((w, i) => <Pressable key={w.id} accessibilityRole="checkbox" accessibilityState={{ checked: selected.includes(w.id) }} onPress={() => toggle(w.id)} style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderTopWidth: i ? 1 : 0, borderColor: C.line }}><Avatar worker={w} size={36} /><View style={{ flex: 1, marginLeft: 11 }}><Text style={{ color: C.ink, fontWeight: '500', fontSize: 13 }}>{w.name}</Text><Text style={{ color: C.muted, fontSize: 11 }}>{w.role} · {w.team}</Text></View><SelectionMark selected={selected.includes(w.id)} /></Pressable>)}</Card>{!!message && <Text style={{ color: C.red, marginBottom: 12 }}>{message}</Text>}<Button label={dates.length > 1 ? `Create ${dates.length} shifts` : 'Create shift'} onPress={save} /></Screen>;
+  const people = workers.filter(w => !w.archived);
+  const teamList = [...new Set(people.map(w => w.team).filter(Boolean))];
+  const selectTeam = (team: string | null) => { play('select'); const ids = people.filter(w => team === null || w.team === team).map(w => w.id); setSelected(cur => ids.every(id => cur.includes(id)) ? cur.filter(id => !ids.includes(id)) : [...new Set([...cur, ...ids])]); };
+  const stepTitle = (n: number, label: string) => <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8, marginBottom: 12 }}><View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: C.onGreen, fontSize: 12, fontWeight: '600' }}>{n}</Text></View><Text style={{ color: C.ink, fontSize: 16, fontWeight: '600' }}>{label}</Text></View>;
+  if (role !== 'admin') return <Screen back title="Admin only"><Text>This action requires an admin account.</Text></Screen>;
+  return <Screen back noNav title="Create a shift" subtitle="Schedule one day or a month at the same place.">
+    {stepTitle(1, 'Details')}
+    <Card style={{ paddingBottom: 4, marginBottom: 20 }}>
+      <Field label="Shift name" value={title} onChangeText={setTitle} placeholder="e.g. Main stage setup" />
+      <Field label="Site / project" value={site} onChangeText={setSite} placeholder="e.g. Northline Festival" />
+      <Field label="Meeting point" value={location} onChangeText={setLocation} placeholder="e.g. East Gate" />
+      <SitePinPicker pin={pin} onChange={setPin} site={site} location={location} />
+    </Card>
+    {stepTitle(2, 'When')}
+    <Card style={{ marginBottom: 20 }}>
+      <ShiftDateTimeFields date={date} onDateChange={changeDate} start={start} onStartChange={setStart} end={end} onEndChange={setEnd} until={repeat === 'once' ? undefined : until} onUntilChange={repeat === 'once' ? undefined : setUntil} />
+      <Text style={{ color: C.ink, fontWeight: '500', fontSize: 13, marginBottom: 8 }}>Repeat</Text>
+      <View style={{ flexDirection: 'row', backgroundColor: C.subtle, borderRadius: 13, padding: 4, gap: 4 }}>{([['once', 'One day'], ['daily', 'Every day'], ['weekdays', 'Weekdays']] as const).map(([value, label]) => <Pressable key={value} accessibilityRole="radio" accessibilityState={{ selected: repeat === value }} onPress={() => { play('select'); setRepeat(value); setMessage(''); }} style={{ flex: 1, minHeight: 40, borderRadius: 10, backgroundColor: repeat === value ? C.surface : 'transparent', borderWidth: repeat === value ? 1 : 0, borderColor: C.line, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: repeat === value ? C.green : C.muted, fontWeight: '600', fontSize: 12 }}>{label}</Text></Pressable>)}</View>
+      {repeat !== 'once' && <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, marginTop: 10 }}>{dates.length} separate daily shifts will be created. Each day has its own QR code and clock history.</Text>}
+    </Card>
+    {stepTitle(3, 'Who is working')}
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+      {[null, ...teamList].map(team => { const ids = people.filter(w => team === null || w.team === team).map(w => w.id); const on = ids.length > 0 && ids.every(id => selected.includes(id)); return <Pressable key={team ?? 'all'} accessibilityRole="button" onPress={() => selectTeam(team)} style={{ paddingHorizontal: 13, paddingVertical: 8, borderRadius: 16, borderWidth: 1, borderColor: on ? C.green : C.line, backgroundColor: on ? C.mint : C.surface }}><Text style={{ color: on ? C.green : C.muted, fontSize: 12, fontWeight: '500' }}>{team ?? 'Everyone'}</Text></Pressable>; })}
+    </View>
+    <Card style={{ padding: 0, overflow: 'hidden', marginBottom: 20 }}>{people.map((w, i) => <Pressable key={w.id} accessibilityRole="checkbox" accessibilityState={{ checked: selected.includes(w.id) }} onPress={() => toggle(w.id)} style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderTopWidth: i ? 1 : 0, borderColor: C.line, backgroundColor: selected.includes(w.id) ? C.mint : 'transparent' }}><Avatar worker={w} size={36} /><View style={{ flex: 1, marginLeft: 11 }}><Text style={{ color: C.ink, fontWeight: '500', fontSize: 13 }}>{w.name}</Text><Text style={{ color: C.muted, fontSize: 11 }}>{w.role} · {w.team}</Text></View><SelectionMark selected={selected.includes(w.id)} /></Pressable>)}{!people.length && <Text style={{ color: C.muted, padding: 16 }}>Add people on the Team tab first.</Text>}</Card>
+    <Card style={{ backgroundColor: C.mint, borderColor: C.line, marginBottom: 14 }}><Text style={{ color: C.green, fontSize: 13, fontWeight: '500' }}>{title.trim() || 'Untitled shift'}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>{dates.length > 1 ? `${dates.length} days from ${date}` : date} · {start}–{end} · {selected.length} {selected.length === 1 ? 'person' : 'people'}</Text></Card>
+    {!!message && <Text style={{ color: C.red, marginBottom: 12 }}>{message}</Text>}
+    <Button label={dates.length > 1 ? `Create ${dates.length} shifts` : 'Create shift'} onPress={save} />
+  </Screen>;
 }

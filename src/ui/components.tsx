@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Animated, Image, Keyboard, Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Pressable } from './LocalizedPressable';
 import { Text } from './LocalizedText';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Worker } from '../lib/data';
 import { useFeedback } from '../lib/feedback';
 import { useStore } from '../lib/store';
@@ -96,7 +96,6 @@ export function Screen({ children, title, subtitle, back = false, action, noNav 
     </View> : <>{topbar}{content}{!noNav && !keyboardOpen && <BottomNav role={role} />}</>}
   </SafeAreaView></KeyboardFrame>;
 }
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 function BottomNav({ role, desktop = false, collapsed = false, onToggleCollapsed }: { role: 'admin' | 'worker'; desktop?: boolean; collapsed?: boolean; onToggleCollapsed?: () => void }) {
   const insets = useSafeAreaInsets();
   const C = useTheme().colors;

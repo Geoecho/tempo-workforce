@@ -4,13 +4,15 @@ import { Platform, Share, useWindowDimensions, View } from 'react-native';
 import { Pressable } from '../ui/LocalizedPressable';
 import { Text } from '../ui/LocalizedText';
 import { csvRow, downloadCsv } from '../lib/csv';
-import { formatDay, formatMoney, formatTime, hoursLabel, localDate, paySummary, payTimeLabel } from '../lib/data';
+import { lateMinutes, formatDay, formatMoney, formatTime, hoursLabel, localDate, paySummary, payTimeLabel } from '../lib/data';
 import { useStore } from '../lib/store';
+import { useExtras } from '../lib/extras';
 import { useLanguage } from '../lib/i18n';
 import { Button, Card, Empty, Screen, Section } from '../ui/components';
 import { useTheme } from '../ui/theme';
 
 export default function Time() {
+  useExtras();
   const C = useTheme().colors;
   const { language, t } = useLanguage();
   const { role, punches, shifts, workers, selectedWorkerId, currency, approvals, reviewTime } = useStore();
@@ -28,7 +30,8 @@ export default function Time() {
   const rows = dates.flatMap(date => workers.filter(w => visible.some(p => p.workerId === w.id && workDate(p) === date)).map(worker => {
     const events = visible.filter(p => p.workerId === worker.id && workDate(p) === date);
     const open = shifts.some(shift => [...events].reverse().find(p => p.shiftId === shift.id)?.type === 'in');
-    return { worker, date, pay: paySummary(punches, worker, date), open, approved: approvals.some(a => a.workerId === worker.id && a.date === date) };
+    const late = shifts.filter(sh => sh.date === date).reduce((sum, sh) => sum + lateMinutes(sh, punches, worker.id), 0);
+    return { worker, date, late, pay: paySummary(punches, worker, date), open, approved: approvals.some(a => a.workerId === worker.id && a.date === date) };
   }));
   const actual = rows.reduce((sum, row) => sum + row.pay.actualSeconds, 0);
   const payable = rows.reduce((sum, row) => sum + row.pay.payableSeconds, 0);
@@ -61,7 +64,7 @@ export default function Time() {
     <View style={{ flex: desktop ? 1 : undefined, width: desktop ? undefined : '100%', minWidth: 0 }}>
     <Section title="Daily summaries" />
     {!!reviewMessage && <Text style={{ color: C.green, fontSize: 12, marginBottom: 10 }}>{reviewMessage}</Text>}
-    {rows.length ? rows.map(row => <Card key={`${row.worker.id}-${row.date}`} style={{ marginBottom: 9, padding: 16 }}><View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><View><Text style={{ color: C.ink, fontWeight: '500', fontSize: 14 }}>{role === 'admin' ? row.worker.name : formatDay(row.date)}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 3 }}>{role === 'admin' ? `${formatDay(row.date)} · ` : ''}{payTimeLabel(row.pay.payableSeconds)} payable</Text></View><Text style={{ color: C.green, fontWeight: '500', fontSize: 15 }}>{formatMoney(row.pay.earningsCents, currency)}</Text></View><View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 10 }}><Text style={{ flex: 1, minWidth: 150, color: row.approved ? C.green : C.muted, fontSize: 12, fontWeight: '500' }}>{row.approved ? '✓ Manager approved' : row.open ? 'Clocked in · approval pending' : 'Awaiting manager approval'}</Text>{role === 'admin' && !row.open && <Button small variant={row.approved ? 'outline' : 'light'} label={row.approved ? 'Undo approval' : 'Approve time'} icon={row.approved ? undefined : <CheckCircle2 size={15} color={C.green} />} onPress={() => void review(row.worker.id, row.date, !row.approved)} />}</View>{row.pay.excessMinutes > 0 && <Text style={{ color: C.red, fontSize: 11, marginTop: 9 }}>{hoursLabel(row.pay.excessMinutes)} over limit · review required</Text>}</Card>) : <Empty title="No time logged this month" detail="Use the month controls above to review earlier time and pay." />}
+    {rows.length ? rows.map(row => <Card key={`${row.worker.id}-${row.date}`} style={{ marginBottom: 9, padding: 16 }}><View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><View><Text style={{ color: C.ink, fontWeight: '500', fontSize: 14 }}>{role === 'admin' ? row.worker.name : formatDay(row.date)}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 3 }}>{role === 'admin' ? `${formatDay(row.date)} · ` : ''}{payTimeLabel(row.pay.payableSeconds)} payable{row.late ? ` · ${row.late} min late` : ''}</Text></View><Text style={{ color: C.green, fontWeight: '500', fontSize: 15 }}>{formatMoney(row.pay.earningsCents, currency)}</Text></View><View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 10 }}><Text style={{ flex: 1, minWidth: 150, color: row.approved ? C.green : C.muted, fontSize: 12, fontWeight: '500' }}>{row.approved ? '✓ Manager approved' : row.open ? 'Clocked in · approval pending' : 'Awaiting manager approval'}</Text>{role === 'admin' && !row.open && <Button small variant={row.approved ? 'outline' : 'light'} label={row.approved ? 'Undo approval' : 'Approve time'} icon={row.approved ? undefined : <CheckCircle2 size={15} color={C.green} />} onPress={() => void review(row.worker.id, row.date, !row.approved)} />}</View>{row.pay.excessMinutes > 0 && <Text style={{ color: C.red, fontSize: 11, marginTop: 9 }}>{hoursLabel(row.pay.excessMinutes)} over limit · review required</Text>}</Card>) : <Empty title="No time logged this month" detail="Use the month controls above to review earlier time and pay." />}
     </View>
     <View style={{ width: desktop ? 360 : '100%', minWidth: 0 }}>
     <Section title="Clock events" /><Text style={{ color: C.muted, fontSize: 12, marginBottom: 13 }}>{t('Timestamps use this device’s local time zone.')}</Text>

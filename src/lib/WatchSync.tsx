@@ -1,41 +1,98 @@
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
-import { activeBreak, formatDay, shiftHasEnded, today } from './data';
+import { activeBreak, formatDay, formatTime, payConfigOf, payUnitLabel, paySummary, shiftHasEnded, today } from './data';
 import { useStore } from './store';
+import { useExtras } from './extras';
+import { workerPayload } from './worker-code';
+
+let debugText = 'Watch sync not started';
+const debugListeners = new Set<(t: string) => void>();
+const setDebug = (t: string) => { debugText = t; debugListeners.forEach(l => l(t)); };
+export function useWatchDebug() {
+  const [text, setText] = useState(debugText);
+  useEffect(() => { debugListeners.add(setText); setText(debugText); return () => { debugListeners.delete(setText); }; }, []);
+  return text;
+}
 
 export const WATCH_SCAN_NOTIFICATION = 'tempo-watch-scan';
 
 export function WatchSync() {
-  const { ready, role, selectedWorkerId, shifts, punches, breaks } = useStore();
+  const { ready, role, selectedWorkerId, shifts, punches, breaks, workers, currency } = useStore();
+  useExtras();
+  const latest = useRef('');
   const active = shifts.find(shift => !shift.archived && shift.date === today() && shift.workerIds.includes(selectedWorkerId)
     && punches.filter(punch => punch.shiftId === shift.id && punch.workerId === selectedWorkerId).sort((a, b) => b.at.localeCompare(a.at))[0]?.type === 'in');
-  const next = shifts.filter(shift => !shift.archived && shift.workerIds.includes(selectedWorkerId) && !shiftHasEnded(shift))
+  const next = shifts.filter(shift => !shift.archived && (role === 'admin' || shift.workerIds.includes(selectedWorkerId)) && !shiftHasEnded(shift))
     .sort((a, b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`))[0];
   const lastCompleted = shifts.filter(shift => !shift.archived && shift.workerIds.includes(selectedWorkerId) && shift.date === today()
     && punches.some(punch => punch.shiftId === shift.id && punch.workerId === selectedWorkerId && punch.type === 'out'))[0];
   const shift = active ?? next ?? lastCompleted;
   const onBreak = active ? activeBreak(breaks, punches, active.id, selectedWorkerId) : null;
   const status = onBreak ? 'onBreak' : active ? 'onShift' : next ? 'upcoming' : lastCompleted ? 'complete' : 'none';
-  const context = JSON.stringify({
-    status: role === 'worker' ? status : 'none',
-    title: role === 'worker' ? shift?.title ?? 'No shift scheduled' : 'Sign in as a worker',
-    site: role === 'worker' ? shift?.site ?? '' : '',
-    time: role === 'worker' && shift ? onBreak ? 'Paid break' : active ? 'Checked in' : status === 'complete' ? 'Done today' : shift.start : '',
-    note: role === 'worker' && shift ? `${formatDay(shift.date)} · ${shift.start}–${shift.end}` : 'Open Tempo on iPhone',
-  });
+  const worker = workers.find(w => w.id === selectedWorkerId);
+  const lastPunch = role === 'worker' ? punches.filter(p => p.workerId === selectedWorkerId).sort((a, b) => a.at.localeCompare(b.at)).at(-1) : undefined;
+  const lastPunchShift = lastPunch ? shifts.find(sh => sh.id === lastPunch.shiftId) : undefined;
+  const seenPunch = useRef<string | null | undefined>(undefined);
+  const sendEvent = useRef<((info: Record<string, unknown>) => void) | null>(null);
+  const pay = role === 'worker' && worker && (active || status === 'complete') ? paySummary(punches, worker, today()) : null;
+  const qrBits = useMemo(() => {
+    if (role !== 'worker' || !selectedWorkerId) return { qrSize: 0, qrBits: '' };
+    try {
+      const matrix = require('qrcode/lib/core/qrcode').create(workerPayload(selectedWorkerId), { errorCorrectionLevel: 'M' }).modules;
+      return { qrSize: matrix.size as number, qrBits: Array.from(matrix.data as ArrayLike<number>).map(v => (v ? '1' : '0')).join('') };
+    } catch { return { qrSize: 0, qrBits: '' }; }
+  }, [role, selectedWorkerId]);
+  const base = {
+    status,
+    title: shift?.title ?? 'No shifts',
+    site: shift?.site ?? '',
+    time: status === 'upcoming' && shift ? shift.start : '',
+    note: shift ? `${formatDay(shift.date)} · ${shift.start}–${shift.end}` : '',
+    running: status === 'onShift',
+    rate: worker ? (payConfigOf(worker.id).type === 'hourly' ? worker.hourlyRate : payConfigOf(worker.id).amount) : 0,
+    ...qrBits,
+    unit: worker ? payUnitLabel(payConfigOf(worker.id).type) : 'hour',
+    currency,
+  };
+  latest.current = JSON.stringify({ ...base, worked: pay?.actualSeconds ?? 0, earned: pay?.earningsCents ?? 0, has: !!pay, at: Date.now() });
+  const key = `${JSON.stringify(base)}:${pay?.actualMinutes ?? 0}`;
 
   useEffect(() => {
-    if (!ready || Platform.OS !== 'ios' || Constants.expoGoConfig) return;
+    if (!ready) return;
+    if (seenPunch.current === undefined) { seenPunch.current = lastPunch?.id ?? null; return; }
+    if (!lastPunch || seenPunch.current === lastPunch.id) return;
+    seenPunch.current = lastPunch.id;
+    // Only react to fresh punches (not a sync of old history).
+    if (Date.now() - new Date(lastPunch.at).getTime() > 2 * 60_000) return;
+    sendEvent.current?.({
+      event: lastPunch.type,
+      eventId: lastPunch.id,
+      eventTitle: lastPunch.type === 'in' ? 'Checked in' : 'Checked out',
+      eventBody: `${formatTime(lastPunch.at)}${lastPunchShift ? ' · ' + lastPunchShift.title : ''}`,
+    });
+  }, [ready, lastPunch?.id]);
+
+  useEffect(() => {
+    if (!ready) { setDebug('Watch: app still loading'); return; }
+    if (Platform.OS !== 'ios') { setDebug('Watch: iOS only'); return; }
+    if (Constants.executionEnvironment === 'storeClient') { setDebug('Watch: not available in Expo Go'); return; }
     let cancelled = false;
     let removeListener: (() => void) | undefined;
     void import('@plevo/expo-watch-connectivity').then(async ({ WatchConnectivity }) => {
       if (!WatchConnectivity.isSupported) return;
       const Notifications = await import('expo-notifications');
+      let lastInfo = '';
+      const report = (extra: string) => { try { const st = WatchConnectivity.sessionState as any; setDebug('Watch: ' + st.activationState + ', paired ' + st.isPaired + ', app installed ' + st.isWatchAppInstalled + ', reachable ' + st.isReachable + (extra ? ' · ' + extra : '')); } catch (e) { setDebug('Watch: state error ' + String(e)); } };
       const publish = () => {
+        report('');
         if (!cancelled && WatchConnectivity.sessionState.activationState === 'activated') {
-          void WatchConnectivity.updateApplicationContext(JSON.parse(context)).catch(() => {});
+          const current = latest.current;
+          const payload = JSON.parse(current);
+          void WatchConnectivity.updateApplicationContext(payload).catch((e: any) => { console.warn('[watch] context failed', e); report('send failed: ' + String((e as Error)?.message ?? e)); });
+          try { if (lastInfo !== current) { lastInfo = current; WatchConnectivity.transferUserInfo(payload); } } catch (e) { console.warn('[watch] userInfo failed', e); }
+          if (WatchConnectivity.sessionState.isReachable) void WatchConnectivity.sendMessage(payload).catch(() => {});
         }
       };
       const activation = WatchConnectivity.addActivationListener(({ activationState }) => {
@@ -44,21 +101,29 @@ export function WatchSync() {
       const subscription = WatchConnectivity.addMessageListener(({ message, replyId }) => {
         if (message.action !== 'openScanner') return;
         const reply = (text: string) => { if (replyId) WatchConnectivity.replyToMessage(replyId, { message: text }); };
-        if (role !== 'worker') return reply('Sign in as a worker on iPhone');
         if (AppState.currentState === 'active') {
-          router.push('/scan');
+          router.push(role === 'worker' ? '/scan' : '/scan-worker');
           return reply('Scanner opened on iPhone');
         }
-        void Notifications.scheduleNotificationAsync({
-          content: { title: 'Scan your site code', body: 'Tap to open the Tempo scanner on iPhone.', data: { kind: WATCH_SCAN_NOTIFICATION }, sound: false },
+        if (role !== 'worker') return reply('Open Tempo on iPhone');
+        void Notifications.requestPermissionsAsync().catch(() => null).then(() => Notifications.scheduleNotificationAsync({
+          content: { title: 'Scan your site code', body: 'Tap to open the Tempo scanner on iPhone.', data: { kind: WATCH_SCAN_NOTIFICATION }, sound: true, interruptionLevel: 'timeSensitive' },
           trigger: null,
-        }).then(() => reply('Tap the iPhone notification')).catch(() => reply('Open Tempo on iPhone to scan'));
+        })).then(() => reply('Tap the iPhone notification')).catch(() => reply('Open Tempo on iPhone to scan'));
       });
-      removeListener = () => { activation.remove(); subscription.remove(); };
+      sendEvent.current = info => {
+        if (WatchConnectivity.sessionState.activationState !== 'activated') return;
+        const payload = { ...JSON.parse(latest.current), ...info };
+        try { WatchConnectivity.transferUserInfo(payload); } catch (e) { console.warn('[watch] event failed', e); }
+        void WatchConnectivity.updateApplicationContext(JSON.parse(latest.current)).catch(() => {});
+        if (WatchConnectivity.sessionState.isReachable) void WatchConnectivity.sendMessage(payload).catch(() => {});
+      };
+      const timer = setInterval(publish, 15000);
+      removeListener = () => { sendEvent.current = null; activation.remove(); subscription.remove(); clearInterval(timer); };
       await WatchConnectivity.activate();
       publish();
-    }).catch(() => { /* Expo Go has no WatchConnectivity native module. */ });
+    }).catch((e: unknown) => { console.warn('[watch] unavailable', e); setDebug('Watch: module error ' + String((e as Error)?.message ?? e)); });
     return () => { cancelled = true; removeListener?.(); };
-  }, [ready, role, context]);
+  }, [ready, role, key]);
   return null;
 }

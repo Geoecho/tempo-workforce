@@ -1,13 +1,15 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Phone, Trash2 } from 'lucide-react-native';
+import { MessageSquare, Phone, Trash2 } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { Pressable } from '../../ui/LocalizedPressable';
 import { Text } from '../../ui/LocalizedText';
 import { formatDay, formatMoney, formatTime, hoursLabel, localDate, paySummary, today, Worker } from '../../lib/data';
 import { confirmRemoval } from '../../lib/confirm';
-import { callWorker } from '../../lib/phone';
+import { callWorker, messageWorker } from '../../lib/phone';
+import { useExtras } from '../../lib/extras';
 import { useStore } from '../../lib/store';
+import { PayEditor, RolePicker, TaskList } from '../../ui/extras-ui';
 import { chooseProfilePhoto } from '../../lib/profile-photo';
 import { Avatar, Button, Card, Screen, Section } from '../../ui/components';
 import { Field } from '../../ui/Field';
@@ -26,6 +28,7 @@ export default function WorkerDetail() {
 function WorkerEditor({ worker }: { worker: Worker }) {
   const C = useTheme().colors;
   const { updateWorker, removeWorker, currency, punches, shifts } = useStore();
+  const { workerRoles, setWorkerRoles } = useExtras();
   const [name, setName] = useState(worker.name);
   const [job, setJob] = useState(worker.role);
   const [team, setTeam] = useState(worker.team);
@@ -79,7 +82,11 @@ function WorkerEditor({ worker }: { worker: Worker }) {
       ].map(stat => <Card key={stat.label} style={{ width: '48%', flexGrow: 1, padding: 15 }}><Text style={{ color: C.muted, fontSize: 11, fontWeight: '600' }}>{stat.label}</Text><Text style={{ color: C.ink, fontSize: 20, fontWeight: '500', marginTop: 7 }}>{stat.value}</Text></Card>)}
     </View>
     {activeShift && <Text style={{ color: C.muted, fontSize: 12, marginTop: 12 }}>Assigned {formatDay(activeShift.date)}</Text>}
-    <View style={{ marginTop: 12 }}><Button label={phone ? `Call ${worker.name.split(' ')[0]}` : 'Add a phone to call'} variant="outline" icon={<Phone size={17} color={C.green} />} onPress={call} /></View>
+    <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}><View style={{ flex: 1 }}><Button label={phone ? `Call ${worker.name.split(' ')[0]}` : 'Add a phone to call'} variant="outline" icon={<Phone size={17} color={C.green} />} onPress={call} /></View><View style={{ flex: 1 }}><Button label="Message" variant="outline" icon={<MessageSquare size={17} color={C.green} />} onPress={async () => { if (!await messageWorker(phone)) setMessage('Add a valid phone number to message this worker.'); }} /></View></View>
+    <Section title="Role tags" />
+    <RolePicker selected={workerRoles[worker.id] ?? []} onChange={ids => setWorkerRoles(worker.id, ids)} currency={currency} />
+    <Section title="Tasks" />
+    <TaskList workerId={worker.id} admin />
     <Section title="Edit details" />
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 13, marginBottom: 20 }}><Avatar worker={{ ...worker, photoUri }} size={58} /><View><Pressable accessibilityRole="button" onPress={async () => { try { const picked = await chooseProfilePhoto(); if (picked) setPhotoUri(picked); } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not open that photo.'); } }} style={{ paddingVertical: 7 }}><Text style={{ color: C.green, fontWeight: '500', fontSize: 13 }}>{photoUri ? 'Change photo' : 'Add profile photo'}</Text></Pressable>{!!photoUri && <Pressable accessibilityRole="button" onPress={() => setPhotoUri(undefined)} style={{ paddingVertical: 5 }}><Text style={{ color: C.muted, fontSize: 12 }}>Remove photo</Text></Pressable>}</View></View>
     <Field label="Full name" value={name} onChangeText={setName} placeholder="Full name" />
@@ -88,6 +95,7 @@ function WorkerEditor({ worker }: { worker: Worker }) {
     <Field label="Phone" value={phone} onChangeText={setPhone} placeholder="Include country code" keyboardType="phone-pad" />
     <Field label={`Hourly rate (${currency})`} value={rate} onChangeText={setRate} placeholder="e.g. 40.00" keyboardType="decimal-pad" />
     <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, marginBottom: 17 }}>Current rate: {formatMoney(Math.round(worker.hourlyRate * 100), currency)}/hour. A rate change applies to future check-ins; recorded sessions retain their original rate.</Text>
+    <PayEditor workerId={worker.id} currency={currency} hourlyRate={worker.hourlyRate} />
     {!!message && <Text style={{ color: C.red, marginBottom: 12 }}>{message}</Text>}
     <Button label="Save worker" onPress={save} />
     <View style={{ marginTop: 13 }}><Button label="Remove worker" variant="danger" icon={<Trash2 size={17} color={C.red} />} onPress={remove} /></View>

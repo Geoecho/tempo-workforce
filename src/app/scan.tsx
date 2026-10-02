@@ -1,7 +1,7 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { router } from 'expo-router';
+import { router, useIsFocused } from 'expo-router';
 import { CheckCircle2, Flashlight, FlashlightOff, QrCode, ScanLine, XCircle } from 'lucide-react-native';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, View } from 'react-native';
 import { Pressable } from '../ui/LocalizedPressable';
 import { Text } from '../ui/LocalizedText';
@@ -19,6 +19,10 @@ export default function Scan() {
   const { play } = useFeedback();
   const { role, shifts, punches, selectedWorkerId, scan, currency, online } = useStore();
   const [permission, requestPermission] = useCameraPermissions();
+  const focused = useIsFocused();
+  const [cameraKey, setCameraKey] = useState(0);
+  useEffect(() => { if (permission && !permission.granted && permission.canAskAgain) void requestPermission(); }, [permission?.granted, permission?.canAskAgain]);
+  useEffect(() => { if (focused) setCameraKey(k => k + 1); }, [focused]);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [torch, setTorch] = useState(false);
@@ -50,7 +54,7 @@ export default function Scan() {
       <View style={{ width: '100%', marginTop: 23 }}><Button label={result.ok ? 'Done' : 'Try again'} variant={result.ok ? 'primary' : 'light'} onPress={() => { if (result.ok) router.replace('/'); else { locked.current = false; setResult(null); } }} /></View>
     </Card> : <>
       <View style={{ height: 310, borderRadius: 20, overflow: 'hidden', backgroundColor: '#26352F', justifyContent: 'center', alignItems: 'center' }}>
-        {permission?.granted ? <CameraView style={{ position: 'absolute', width: '100%', height: '100%' }} facing="back" enableTorch={torch} barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={busy ? undefined : ({ data }) => process(data)} /> : <View style={{ alignItems: 'center', padding: 22 }}><ScanLine size={44} color="#CFE5D8" /><Text style={{ color: '#fff', textAlign: 'center', marginTop: 13, fontWeight: '500' }}>{t('Camera access is needed to scan')}</Text><View style={{ marginTop: 17 }}><Button label={permission?.canAskAgain === false ? 'Open camera settings' : 'Allow camera'} small variant="light" onPress={() => { if (permission?.canAskAgain === false) Linking.openSettings(); else requestPermission(); }} /></View></View>}
+        {permission?.granted && focused ? <CameraView key={cameraKey} style={{ position: 'absolute', width: '100%', height: '100%' }} facing="back" enableTorch={torch} barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={busy ? undefined : ({ data }) => process(data)} /> : <View style={{ alignItems: 'center', padding: 22 }}><ScanLine size={44} color="#CFE5D8" /><Text style={{ color: '#fff', textAlign: 'center', marginTop: 13, fontWeight: '500' }}>{t('Camera access is needed to scan')}</Text><View style={{ marginTop: 17 }}><Button label={permission?.canAskAgain === false ? 'Open camera settings' : 'Allow camera'} small variant="light" onPress={() => { if (permission?.canAskAgain === false) Linking.openSettings(); else requestPermission(); }} /></View></View>}
         {permission?.granted && <><View pointerEvents="none" style={{ width: 190, height: 190, borderWidth: 3, borderColor: '#D6F4E1', borderRadius: 22 }} /><Pressable accessibilityRole="button" accessibilityLabel={torch ? 'Turn off flashlight' : 'Turn on flashlight'} onPress={() => setTorch(value => !value)} style={{ position: 'absolute', bottom: 15, right: 16, borderRadius: 25, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: '#163D32CC' }}>{torch ? <FlashlightOff size={21} color="#fff" /> : <Flashlight size={21} color="#fff" />}</Pressable></>}
         {busy && <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#163D32CC', alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color="#fff" size="large" /><Text style={{ color: '#fff', fontWeight: '500', marginTop: 12 }}>{t('Checking code…')}</Text></View>}
       </View>
