@@ -1,4 +1,4 @@
-import * as Notifications from 'expo-notifications';
+import * as Notifications from './notifications';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useEffect } from 'react';

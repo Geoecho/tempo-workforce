@@ -7,6 +7,7 @@ import { FeedbackProvider } from '../lib/feedback';
 import { ShiftReminders } from '../lib/ShiftReminders';
 import { WatchSync } from '../lib/WatchSync';
 import { StoreProvider } from '../lib/store';
+import { ExtrasProvider } from '../lib/extras';
 import { LanguageProvider } from '../lib/i18n';
 import { WebBrandHead } from '../ui/WebBrandHead';
 import { ThemeProvider, useTheme } from '../ui/theme';
@@ -28,7 +29,7 @@ function AppContent() {
   // Sync Android nav bar / iOS home-indicator background with active theme
   useEffect(() => { void SystemUI.setBackgroundColorAsync(C.bg); }, [C.bg]);
   const statusBar = <StatusBar style={pathname === '/welcome' ? 'dark' : scheme === 'dark' ? 'light' : 'dark'} />;
-  return <StoreProvider>{statusBar}<AppStack />{pathname !== '/welcome' && pathname !== '/start' && <><ShiftReminders /><WatchSync /></>}</StoreProvider>;
+  return <StoreProvider><ExtrasProvider>{statusBar}<AppStack />{pathname !== '/welcome' && pathname !== '/start' && <><ShiftReminders /><WatchSync /></>}</ExtrasProvider></StoreProvider>;
 }
 
 export default function Layout() { return <SafeAreaProvider><ThemeProvider><LanguageProvider><FeedbackProvider><WebBrandHead /><AppContent /></FeedbackProvider></LanguageProvider></ThemeProvider></SafeAreaProvider>; }

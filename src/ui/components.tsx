@@ -1,10 +1,10 @@
 import { router, usePathname } from 'expo-router';
-import { Check, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react-native';
+import { Check, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import React, { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Animated, Image, Keyboard, Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Pressable } from './LocalizedPressable';
 import { Text } from './LocalizedText';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Worker } from '../lib/data';
 import { useFeedback } from '../lib/feedback';
 import { useStore } from '../lib/store';
@@ -44,7 +44,7 @@ export function Section({ title, action, onAction }: { title: string; action?: s
 export function Screen({ children, title, subtitle, back = false, action, noNav = false, noScroll = false, wide = false }: { children?: React.ReactNode; title?: string; subtitle?: string; back?: boolean; action?: React.ReactNode; noNav?: boolean; noScroll?: boolean; wide?: boolean }) {
   const C = useTheme().colors;
   const styles = useStyles();
-  const { role, workers, selectedWorkerId, workspaceName, accountEmail, notifications, messages } = useStore();
+  const { role, workers, selectedWorkerId, workspaceName, accountEmail, notifications } = useStore();
   const { t } = useLanguage();
   const path = usePathname();
   const { width } = useWindowDimensions();
@@ -73,7 +73,6 @@ export function Screen({ children, title, subtitle, back = false, action, noNav 
   const profile = workers.find(worker => worker.id === selectedWorkerId && !worker.archived);
   const initials = role === 'worker' && profile ? profile.initials : (accountEmail?.slice(0, 1) || workspaceName?.slice(0, 1) || 'T').toUpperCase();
   const unread = notifications.filter(item => !item.readAt).length;
-  const unreadMessages = messages?.filter(m => m.readAt === null && m.to !== 'all' && m.from !== (role === 'admin' ? 'admin' : selectedWorkerId)).length || 0;
   
   const topbar = <View style={[styles.topbar, desktop && styles.desktopTopbar]}>
     {back && <Pressable accessibilityLabel="Go back" onPress={() => router.back()} style={styles.topIcon}><ChevronLeft size={23} color={C.ink} /></Pressable>}
@@ -81,10 +80,6 @@ export function Screen({ children, title, subtitle, back = false, action, noNav 
       {desktop ? title && <><Text style={[styles.title, { fontSize: 28 }]}>{t(title)}</Text>{subtitle && <Text style={styles.subtitle}>{t(subtitle)}</Text>}</> : <BrandLogo size={24} />}
     </View>
     {action}
-    <Pressable accessibilityRole="button" accessibilityLabel="Messages" onPress={() => router.push('/messages')} style={styles.headerButton}>
-      <MessageCircle size={20} color={C.green} />
-      {unreadMessages > 0 && <View style={styles.unreadDot} />}
-    </Pressable>
     {<Pressable accessibilityRole="button" accessibilityLabel={`${unread} unread notifications`} onPress={() => router.push('/notifications')} style={styles.headerButton}><AppIcon name="bell" size={21} color={C.green} playing={false} />{unread > 0 && <View style={styles.unreadDot} />}</Pressable>}
     <Pressable accessibilityRole="button" accessibilityLabel={path === '/settings' ? 'Profile and settings open' : 'Open profile and settings'} accessibilityState={{ disabled: path === '/settings' }} disabled={path === '/settings'} onPress={() => router.push('/settings')} style={[styles.headerProfile, { overflow: 'hidden' }]}>{role === 'worker' && profile?.photoUri ? <Image source={{ uri: profile.photoUri }} style={{ width: 39, height: 39 }} /> : <Text style={styles.headerInitials}>{initials}</Text>}</Pressable>
   </View>;
@@ -95,7 +90,7 @@ export function Screen({ children, title, subtitle, back = false, action, noNav 
   const bodyStyles = [styles.body, desktop && styles.desktopBody, desktop && wide && styles.desktopWideBody, desktop && !wide && back && styles.desktopFocusedBody];
   const content = noScroll ? <View style={{ flex: 1, backgroundColor: C.bg }}><View style={[{ flex: 1 }, bodyStyles]}>{Inner}</View></View> : <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={bodyStyles} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>{Inner}</ScrollView>;
 
-  return <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+  return <SafeAreaView style={styles.safe} edges={desktop || noNav || keyboardOpen ? ['top', 'bottom'] : ['top']}>
     {desktop ? <View style={styles.desktopShell}>
       <BottomNav role={role} desktop collapsed={sidebarCollapsed} onToggleCollapsed={() => {
         const next = !sidebarCollapsed;
@@ -113,6 +108,7 @@ function BottomNav({ role, desktop = false, collapsed = false, onToggleCollapsed
   const { play } = useFeedback();
   const { t } = useLanguage();
   const path = usePathname();
+  const insets = useSafeAreaInsets();
   const [hovered, setHovered] = useState<string | null>(null);
   const [activated, setActivated] = useState<string | null>(path);
   const [activationCount, setActivationCount] = useState(0);
@@ -125,7 +121,7 @@ function BottomNav({ role, desktop = false, collapsed = false, onToggleCollapsed
   ] : [
     { href: '/', label: 'Home', icon: 'home' }, { href: '/schedule', label: 'Shifts', icon: 'calendar' }, { href: '/scan', label: 'Scan', icon: 'scan' }, { href: '/time', label: 'Hours', icon: 'time' }, { href: '/settings', label: 'More', icon: 'settings' },
   ];
-  return <View style={desktop ? [styles.sideNav, collapsed && styles.sideNavCollapsed] : styles.nav}>
+  return <View style={desktop ? [styles.sideNav, collapsed && styles.sideNavCollapsed] : [styles.nav, { height: 69 + insets.bottom, paddingBottom: insets.bottom }]}>
     {desktop && <View style={[styles.sideBrandBox, collapsed && styles.sideBrandBoxCollapsed]}>
       {!collapsed && <BrandLogo size={27} />}
       <Pressable accessibilityRole="button" accessibilityLabel={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onPress={onToggleCollapsed} style={styles.sidebarToggle}>
