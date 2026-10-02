@@ -38,18 +38,18 @@ export function ShiftCard({ shift, compact = false, history = false }: { shift: 
       <Card style={{ padding: compact ? 19 : 23 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <View style={{ flex: 1 }}>
-            <Text style={{ color: C.muted, fontSize: 11 }}>{formatDay(shift.date)}  ·  {shift.start}–{shift.end}</Text>
+            <Text style={{ color: C.muted, fontSize: 14 }}>{formatDay(shift.date)}  ·  {shift.start}–{shift.end}</Text>
             <Text style={{ color: C.ink, fontSize: compact ? 18 : 20, fontWeight: '400', marginTop: 9, letterSpacing: -.4 }}>{shift.title}</Text>
-            <Text style={{ color: C.muted, fontSize: 13, marginTop: 3 }}>{shift.site}</Text>
-            {history && <Text style={{ color: C.green, fontSize: 11, fontWeight: '500', marginTop: 7 }}>{shift.archived ? 'REMOVED · ' : ''}{checkedIn} checked in · {hoursLabel(recordedMinutes)} recorded</Text>}
+            <Text style={{ color: C.muted, fontSize: 14, marginTop: 3 }}>{shift.site}</Text>
+            {history && <Text style={{ color: C.green, fontSize: 14, fontWeight: '500', marginTop: 7 }}>{shift.archived ? 'REMOVED · ' : ''}{checkedIn} checked in · {hoursLabel(recordedMinutes)} recorded</Text>}
           </View>
           <ArrowUpRight size={18} color={C.muted} />
         </View>
         {!!myRoles.length && <View style={{ marginTop: 11 }}><RoleChips roles={myRoles} currency={currency} /></View>}
         <View style={{ height: 1, backgroundColor: C.line, marginVertical: 15 }} />
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, marginRight: 12 }}><MapPin size={13} color={C.muted} /><Text style={{ flex: 1, color: C.muted, fontSize: 12 }}>{shift.location}</Text></View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><UsersRound size={13} color={C.muted} /><Text style={{ color: C.muted, fontSize: 12 }}>{shift.workerIds.filter(id => workers.some(worker => worker.id === id)).length}</Text></View>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, marginRight: 12 }}><MapPin size={13} color={C.muted} /><Text style={{ flex: 1, color: C.muted, fontSize: 14 }}>{shift.location}</Text></View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><UsersRound size={13} color={C.muted} /><Text style={{ color: C.muted, fontSize: 14 }}>{shift.workerIds.filter(id => workers.some(worker => worker.id === id)).length}</Text></View>
         </View>
       </Card>
     </Pressable>

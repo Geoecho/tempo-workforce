@@ -10,6 +10,7 @@ import { useStore } from '../lib/store';
 import { useLanguage } from '../lib/i18n';
 import { Avatar, Card, Screen } from '../ui/components';
 import { ContentGrid } from '../ui/ContentGrid';
+import { WorkerInvitation } from '../ui/WorkerInvitation';
 import { useTheme } from '../ui/theme';
 
 export default function Team() {
@@ -46,7 +47,7 @@ export default function Team() {
     <View style={{ flexDirection: desktop ? 'row' : 'column', alignItems: desktop ? 'center' : 'stretch', gap: desktop ? 12 : 0, marginBottom: desktop ? 20 : 0 }}>
     <View style={{ flex: desktop ? 1 : undefined, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 13, minHeight: 46, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: desktop ? 0 : 12 }}>
       <Search size={17} color={C.muted} />
-      <TextInput accessibilityLabel={t('Search people or teams')} value={query} onChangeText={setQuery} placeholder={t('Search people or teams')} placeholderTextColor={C.placeholder} style={{ flex: 1, color: C.ink, fontSize: 13 }} />
+      <TextInput accessibilityLabel={t('Search people or teams')} value={query} onChangeText={setQuery} placeholder={t('Search people or teams')} placeholderTextColor={C.placeholder} style={{ flex: 1, color: C.ink, fontSize: 14 }} />
     </View>
     <View style={{ flexDirection: 'row', gap: 9, marginBottom: desktop ? 0 : 18 }}>
       <Pressable accessibilityRole="button" onPress={() => { setCreating(true); setError(''); }} style={{ width: desktop ? 135 : undefined, flex: desktop ? undefined : 1, minHeight: 45, borderRadius: 12, borderWidth: 1, borderColor: C.green, backgroundColor: C.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
@@ -57,6 +58,7 @@ export default function Team() {
       </Pressable>
     </View>
     </View>
+    <WorkerInvitation />
     {creating && <Card style={{ marginBottom: 18 }}>
       <Text style={{ color: C.ink, fontWeight: '500', fontSize: 16, marginBottom: 5 }}>{t('New team')}</Text>
       <Text style={{ color: C.muted, fontSize: 12, marginBottom: 12 }}>{t('Create the team now, then add people to it.')}</Text>
@@ -75,7 +77,7 @@ export default function Team() {
         <Text style={{ color: C.ink, fontWeight: '500', fontSize: 16, marginBottom: 11 }}>{team} <Text style={{ color: C.muted, fontSize: 12 }}>({people.length})</Text></Text>
         {people.length ? <Card style={{ padding: 0, marginBottom: 23, overflow: 'hidden' }}>
           {people.map((worker, index) => <WorkerRow key={worker.id} worker={worker} shifts={shifts.filter(shift => shift.workerIds.includes(worker.id)).length} currency={currency} first={index === 0} />)}
-        </Card> : <Card style={{ marginBottom: 23 }}><Text style={{ color: C.muted, fontSize: 13 }}>{t('No people in this team yet.')}</Text><Pressable onPress={() => router.push({ pathname: '/new-worker', params: { team } })} style={{ marginTop: 11 }}><Text style={{ color: C.green, fontWeight: '500', fontSize: 13 }}>{t('Add person')} →</Text></Pressable></Card>}
+        </Card> : <Card style={{ marginBottom: 23 }}><Text style={{ color: C.muted, fontSize: 14 }}>{t('No people in this team yet.')}</Text><Pressable onPress={() => router.push({ pathname: '/new-worker', params: { team } })} style={{ marginTop: 11 }}><Text style={{ color: C.green, fontWeight: '500', fontSize: 14 }}>{t('Add person')} →</Text></Pressable></Card>}
       </View>;
     })}
     {!visibleTeams.length && <Card><Text style={{ color: C.muted }}>{t(search ? 'No people or teams match your search.' : 'Create a team to get started.')}</Text></Card>}
@@ -85,10 +87,10 @@ export default function Team() {
 
 function WorkerRow({ worker, shifts, currency, first }: { worker: Worker; shifts: number; currency: Currency; first: boolean }) {
   const C = useTheme().colors;
-  return <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderTopWidth: first ? 0 : 1, borderTopColor: C.line }}>
-    <Pressable onPress={() => router.push({ pathname: '/worker/[id]', params: { id: worker.id } })} style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}><Avatar worker={worker} size={40} /><View style={{ marginLeft: 12, flex: 1 }}><Text style={{ color: C.ink, fontWeight: '500', fontSize: 14 }}>{worker.name}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{worker.role} · {shifts} shifts</Text><Text style={{ color: C.green, fontSize: 11, fontWeight: '500', marginTop: 3 }}>{formatMoney(Math.round(worker.hourlyRate * 100), currency)}/h</Text></View></Pressable>
-    {worker.phone && <Pressable accessibilityLabel={`Call ${worker.name}`} onPress={() => callWorker(worker.phone)} style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: C.mint, alignItems: 'center', justifyContent: 'center', marginRight: 5 }}><Phone size={17} color={C.green} /></Pressable>}
-    {worker.phone && <Pressable accessibilityLabel={`Message ${worker.name}`} onPress={() => void messageWorker(worker.phone)} style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: C.mint, alignItems: 'center', justifyContent: 'center', marginRight: 5 }}><MessageSquare size={17} color={C.green} /></Pressable>}
-    <Pressable accessibilityLabel={`Open ${worker.name} profile`} onPress={() => router.push({ pathname: '/worker/[id]', params: { id: worker.id } })} style={{ width: 28, height: 36, alignItems: 'center', justifyContent: 'center' }}><ChevronRight size={17} color={C.muted} /></Pressable>
+  return <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8, alignItems: 'center', padding: 14, borderTopWidth: first ? 0 : 1, borderTopColor: C.line }}>
+    <Pressable onPress={() => router.push({ pathname: '/worker/[id]', params: { id: worker.id } })} style={{ flex: 1, minWidth: 150, minHeight: 48, flexDirection: 'row', alignItems: 'center' }}><Avatar worker={worker} size={40} /><View style={{ marginLeft: 12, flex: 1 }}><Text style={{ color: C.ink, fontWeight: '500', fontSize: 14 }}>{worker.name}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{worker.role} · {shifts} shifts</Text><Text style={{ color: C.green, fontSize: 11, fontWeight: '500', marginTop: 3 }}>{formatMoney(Math.round(worker.hourlyRate * 100), currency)}/h</Text></View></Pressable>
+    {worker.phone && <Pressable accessibilityLabel={`Call ${worker.name}`} onPress={() => callWorker(worker.phone)} style={{ width: 48, height: 48, borderRadius: 11, backgroundColor: C.mint, alignItems: 'center', justifyContent: 'center', marginRight: 5 }}><Phone size={17} color={C.green} /></Pressable>}
+    {worker.phone && <Pressable accessibilityLabel={`Message ${worker.name}`} onPress={() => void messageWorker(worker.phone)} style={{ width: 48, height: 48, borderRadius: 11, backgroundColor: C.mint, alignItems: 'center', justifyContent: 'center', marginRight: 5 }}><MessageSquare size={17} color={C.green} /></Pressable>}
+    <Pressable accessibilityLabel={`Open ${worker.name} profile`} onPress={() => router.push({ pathname: '/worker/[id]', params: { id: worker.id } })} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}><ChevronRight size={17} color={C.muted} /></Pressable>
   </View>;
 }

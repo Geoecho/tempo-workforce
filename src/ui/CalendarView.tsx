@@ -28,9 +28,9 @@ export function CalendarView({ shifts }: { shifts: Shift[] }) {
   return <View>
     <Card style={{ padding: 14 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <Pressable accessibilityLabel="Previous month" onPress={() => shiftMonth(-1)} style={{ padding: 8 }}><ChevronLeft size={20} color={C.green} /></Pressable>
+        <Pressable accessibilityLabel="Previous month" onPress={() => shiftMonth(-1)} style={{ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}><ChevronLeft size={20} color={C.green} /></Pressable>
         <Text style={{ color: C.ink, fontSize: 16, fontWeight: '500' }}>{month.toLocaleDateString(language, { month: 'long', year: 'numeric' })}</Text>
-        <Pressable accessibilityLabel="Next month" onPress={() => shiftMonth(1)} style={{ padding: 8 }}><ChevronRight size={20} color={C.green} /></Pressable>
+        <Pressable accessibilityLabel="Next month" onPress={() => shiftMonth(1)} style={{ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}><ChevronRight size={20} color={C.green} /></Pressable>
       </View>
       <View style={{ flexDirection: 'row' }}>{weekdays.map((w, i) => <Text key={i} style={{ flex: 1, textAlign: 'center', color: C.muted, fontSize: 11, paddingBottom: 6 }}>{w}</Text>)}</View>
       {Array.from({ length: cells.length / 7 }, (_, row) => <View key={row} style={{ flexDirection: 'row' }}>

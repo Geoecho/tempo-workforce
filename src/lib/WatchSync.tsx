@@ -13,7 +13,7 @@ const debugListeners = new Set<(t: string) => void>();
 const setDebug = (t: string) => { debugText = t; debugListeners.forEach(l => l(t)); };
 export function useWatchDebug() {
   const [text, setText] = useState(debugText);
-  useEffect(() => { debugListeners.add(setText); setText(debugText); return () => { debugListeners.delete(setText); }; }, []);
+  useEffect(() => { debugListeners.add(setText); return () => { debugListeners.delete(setText); }; }, []);
   return text;
 }
 
@@ -41,6 +41,7 @@ export function WatchSync() {
   const qrBits = useMemo(() => {
     if (role !== 'worker' || !selectedWorkerId) return { qrSize: 0, qrBits: '' };
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const matrix = require('qrcode/lib/core/qrcode').create(workerPayload(selectedWorkerId), { errorCorrectionLevel: 'M' }).modules;
       return { qrSize: matrix.size as number, qrBits: Array.from(matrix.data as ArrayLike<number>).map(v => (v ? '1' : '0')).join('') };
     } catch { return { qrSize: 0, qrBits: '' }; }
@@ -57,8 +58,8 @@ export function WatchSync() {
     unit: worker ? payUnitLabel(payConfigOf(worker.id).type) : 'hour',
     currency,
   };
-  latest.current = JSON.stringify({ ...base, worked: pay?.actualSeconds ?? 0, earned: pay?.earningsCents ?? 0, has: !!pay, at: Date.now() });
   const key = `${JSON.stringify(base)}:${pay?.actualMinutes ?? 0}`;
+  useEffect(() => { latest.current = JSON.stringify({ ...base, worked: pay?.actualSeconds ?? 0, earned: pay?.earningsCents ?? 0, has: !!pay, at: Date.now() }); }, [base, pay, key]);
 
   useEffect(() => {
     if (!ready) return;
@@ -73,7 +74,7 @@ export function WatchSync() {
       eventTitle: lastPunch.type === 'in' ? 'Checked in' : 'Checked out',
       eventBody: `${formatTime(lastPunch.at)}${lastPunchShift ? ' · ' + lastPunchShift.title : ''}`,
     });
-  }, [ready, lastPunch?.id]);
+  }, [ready, lastPunch, lastPunchShift]);
 
   useEffect(() => {
     if (!ready) return setDebug('Watch: app still loading');

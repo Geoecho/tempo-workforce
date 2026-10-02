@@ -12,6 +12,7 @@ import { useStore } from '../../lib/store';
 import { PayEditor, RolePicker, TaskList } from '../../ui/extras-ui';
 import { chooseProfilePhoto } from '../../lib/profile-photo';
 import { Avatar, Button, Card, Screen, Section } from '../../ui/components';
+import { WorkerInvitation } from '../../ui/WorkerInvitation';
 import { Field } from '../../ui/Field';
 import { useTheme } from '../../ui/theme';
 
@@ -72,6 +73,7 @@ function WorkerEditor({ worker }: { worker: Worker }) {
     <Card style={{ flexDirection: 'row', alignItems: 'center' }}><Avatar worker={worker} size={51} /><View style={{ flex: 1, marginLeft: 13 }}><Text style={{ color: C.ink, fontSize: 17, fontWeight: '500' }}>{worker.name}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{worker.role} · {worker.team}</Text></View><View style={{ backgroundColor: onSite ? C.mint : C.subtle, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 16 }}><Text style={{ color: onSite ? C.green : C.muted, fontSize: 11, fontWeight: '500' }}>{onSite ? 'Active now' : 'Off the clock'}</Text></View></Card>
     {missingCheckout && <Text style={{ color: C.red, fontSize: 12, marginTop: 10 }}>A past shift is missing a check-out.</Text>}
     {activePunch && <Card style={{ marginTop: 12, backgroundColor: C.mint, borderColor: C.line }}><Text style={{ color: C.green, fontSize: 12, fontWeight: '500' }}>CURRENTLY CHECKED IN</Text><Text style={{ color: C.ink, fontSize: 16, fontWeight: '500', marginTop: 5 }}>{activeShift?.title ?? 'Active shift'}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>{activeShift?.site ? `${activeShift.site} · ` : ''}Since {formatTime(activePunch.at)}</Text></Card>}
+    <WorkerInvitation workerId={worker.id} />
     <Section title="At a glance" />
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
       {[

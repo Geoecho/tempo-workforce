@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { Pressable } from '../ui/LocalizedPressable';
-import { Text } from '../ui/LocalizedText';
+import { Text, TextInput } from '../ui/LocalizedText';
 import { localDate, repeatShiftDates, ShiftRepeat, today, uid } from '../lib/data';
 import { useFeedback } from '../lib/feedback';
 import { useStore } from '../lib/store';
@@ -41,6 +41,7 @@ export default function NewShift() {
   const [end, setEnd] = useState('17:00');
   const [selected, setSelected] = useState<string[]>([]);
   const [message, setMessage] = useState('');
+  const [workerQuery, setWorkerQuery] = useState('');
   const dates = repeatShiftDates(date, until, repeat);
   const toggle = (id: string) => { play('select'); setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]); };
   const changeDate = (value: string) => {
@@ -62,11 +63,12 @@ export default function NewShift() {
   };
   if (role !== 'admin') return <Screen back title="Admin only"><Text>This action requires an admin account.</Text></Screen>;
   const people = workers.filter(w => !w.archived);
+  const matchingPeople = people.filter(w => `${w.name} ${w.role} ${w.team}`.toLowerCase().includes(workerQuery.trim().toLowerCase()));
   const teamList = [...new Set(people.map(w => w.team).filter(Boolean))];
   const selectTeam = (team: string | null) => { play('select'); const ids = people.filter(w => team === null || w.team === team).map(w => w.id); setSelected(cur => ids.every(id => cur.includes(id)) ? cur.filter(id => !ids.includes(id)) : [...new Set([...cur, ...ids])]); };
   const stepTitle = (n: number, label: string) => <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8, marginBottom: 12 }}><View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: C.onGreen, fontSize: 12, fontWeight: '600' }}>{n}</Text></View><Text style={{ color: C.ink, fontSize: 16, fontWeight: '600' }}>{label}</Text></View>;
   if (role !== 'admin') return <Screen back title="Admin only"><Text>This action requires an admin account.</Text></Screen>;
-  return <Screen back noNav title="Create a shift" subtitle="Schedule one day or a month at the same place.">
+  return <Screen back noNav title="Create a shift" subtitle="Schedule one day or a month at the same place." footer={<View style={{ gap: 8 }}><Text style={{ color: C.muted, fontSize: 14 }}>{selected.length} <Text>people selected</Text> · {dates.length} <Text>days</Text></Text>{!!message && <Text accessibilityRole="alert" style={{ color: C.red, fontSize: 14 }}>{message}</Text>}<Button label={dates.length > 1 ? `Create ${dates.length} shifts` : 'Create shift'} onPress={save} /></View>}>
     {stepTitle(1, 'Details')}
     <Card style={{ paddingBottom: 4, marginBottom: 20 }}>
       <Field label="Shift name" value={title} onChangeText={setTitle} placeholder="e.g. Main stage setup" />
@@ -77,17 +79,17 @@ export default function NewShift() {
     {stepTitle(2, 'When')}
     <Card style={{ marginBottom: 20 }}>
       <ShiftDateTimeFields date={date} onDateChange={changeDate} start={start} onStartChange={setStart} end={end} onEndChange={setEnd} until={repeat === 'once' ? undefined : until} onUntilChange={repeat === 'once' ? undefined : setUntil} />
-      <Text style={{ color: C.ink, fontWeight: '500', fontSize: 13, marginBottom: 8 }}>Repeat</Text>
+      <Text style={{ color: C.ink, fontWeight: '500', fontSize: 14, marginBottom: 8 }}>Repeat</Text>
       <View style={{ flexDirection: 'row', backgroundColor: C.subtle, borderRadius: 13, padding: 4, gap: 4 }}>{([['once', 'One day'], ['daily', 'Every day'], ['weekdays', 'Weekdays']] as const).map(([value, label]) => <Pressable key={value} accessibilityRole="radio" accessibilityState={{ selected: repeat === value }} onPress={() => { play('select'); setRepeat(value); setMessage(''); }} style={{ flex: 1, minHeight: 40, borderRadius: 10, backgroundColor: repeat === value ? C.surface : 'transparent', borderWidth: repeat === value ? 1 : 0, borderColor: C.line, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: repeat === value ? C.green : C.muted, fontWeight: '600', fontSize: 12 }}>{label}</Text></Pressable>)}</View>
       {repeat !== 'once' && <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, marginTop: 10 }}>{dates.length} separate daily shifts will be created. Each day has its own QR code and clock history.</Text>}
     </Card>
     {stepTitle(3, 'Who is working')}
+    <TextInput accessibilityLabel="Search people or teams" placeholder="Search people or teams" value={workerQuery} onChangeText={setWorkerQuery} style={{ minHeight: 48, fontSize: 16, borderWidth: 1, borderColor: C.line, borderRadius: 10, paddingHorizontal: 14, marginBottom: 12, backgroundColor: C.surface }} />
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
       {[null, ...teamList].map(team => { const ids = people.filter(w => team === null || w.team === team).map(w => w.id); const on = ids.length > 0 && ids.every(id => selected.includes(id)); return <Pressable key={team ?? 'all'} accessibilityRole="button" onPress={() => selectTeam(team)} style={{ paddingHorizontal: 13, paddingVertical: 8, borderRadius: 16, borderWidth: 1, borderColor: on ? C.green : C.line, backgroundColor: on ? C.mint : C.surface }}><Text style={{ color: on ? C.green : C.muted, fontSize: 12, fontWeight: '500' }}>{team ?? 'Everyone'}</Text></Pressable>; })}
     </View>
-    <Card style={{ padding: 0, overflow: 'hidden', marginBottom: 20 }}>{people.map((w, i) => <Pressable key={w.id} accessibilityRole="checkbox" accessibilityState={{ checked: selected.includes(w.id) }} onPress={() => toggle(w.id)} style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderTopWidth: i ? 1 : 0, borderColor: C.line, backgroundColor: selected.includes(w.id) ? C.mint : 'transparent' }}><Avatar worker={w} size={36} /><View style={{ flex: 1, marginLeft: 11 }}><Text style={{ color: C.ink, fontWeight: '500', fontSize: 13 }}>{w.name}</Text><Text style={{ color: C.muted, fontSize: 11 }}>{w.role} · {w.team}</Text></View><SelectionMark selected={selected.includes(w.id)} /></Pressable>)}{!people.length && <Text style={{ color: C.muted, padding: 16 }}>Add people on the Team tab first.</Text>}</Card>
-    <Card style={{ backgroundColor: C.mint, borderColor: C.line, marginBottom: 14 }}><Text style={{ color: C.green, fontSize: 13, fontWeight: '500' }}>{title.trim() || 'Untitled shift'}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>{dates.length > 1 ? `${dates.length} days from ${date}` : date} · {start}–{end} · {selected.length} {selected.length === 1 ? 'person' : 'people'}</Text></Card>
-    {!!message && <Text style={{ color: C.red, marginBottom: 12 }}>{message}</Text>}
-    <Button label={dates.length > 1 ? `Create ${dates.length} shifts` : 'Create shift'} onPress={save} />
+    <Card style={{ padding: 0, overflow: 'hidden', marginBottom: 20 }}>{matchingPeople.map((w, i) => <Pressable key={w.id} accessibilityRole="checkbox" accessibilityState={{ checked: selected.includes(w.id) }} onPress={() => toggle(w.id)} style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderTopWidth: i ? 1 : 0, borderColor: C.line, backgroundColor: selected.includes(w.id) ? C.mint : 'transparent' }}><Avatar worker={w} size={36} /><View style={{ flex: 1, marginLeft: 11 }}><Text style={{ color: C.ink, fontWeight: '500', fontSize: 14 }}>{w.name}</Text><Text style={{ color: C.muted, fontSize: 13 }}>{w.role} · {w.team}</Text></View><SelectionMark selected={selected.includes(w.id)} /></Pressable>)}{!matchingPeople.length && <Text style={{ color: C.muted, padding: 16 }}>{people.length ? 'No people or teams match your search.' : 'Add people on the Team tab first.'}</Text>}</Card>
+    <Card style={{ backgroundColor: C.mint, borderColor: C.line, marginBottom: 14 }}><Text style={{ color: C.green, fontSize: 14, fontWeight: '500' }}>{title.trim() || 'Untitled shift'}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>{dates.length > 1 ? `${dates.length} days from ${date}` : date} · {start}–{end} · {selected.length} {selected.length === 1 ? 'person' : 'people'}</Text></Card>
+
   </Screen>;
 }

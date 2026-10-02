@@ -1,75 +1,111 @@
-import { CheckCircle2, ChevronLeft, ChevronRight, Download, LogIn, LogOut, Wallet } from 'lucide-react-native';
+import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Download } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Platform, Share, useWindowDimensions, View } from 'react-native';
+import { Platform, Share, View } from 'react-native';
 import { Pressable } from '../ui/LocalizedPressable';
 import { Text } from '../ui/LocalizedText';
 import { csvRow, downloadCsv } from '../lib/csv';
-import { lateMinutes, formatDay, formatMoney, formatTime, hoursLabel, localDate, paySummary, payTimeLabel } from '../lib/data';
+import { lateMinutes, formatDay, formatMoney, formatTime, hoursLabel, localDate, paySummary, payTimeLabel, shiftHasEnded } from '../lib/data';
 import { useStore } from '../lib/store';
-import { useExtras } from '../lib/extras';
 import { useLanguage } from '../lib/i18n';
-import { Button, Card, Empty, Screen, Section } from '../ui/components';
+import { useNow } from '../lib/use-now';
+import { Button, Card, Empty, Pill, Screen, Section } from '../ui/components';
+import { ChoiceChips } from '../ui/ChoiceChips';
 import { useTheme } from '../ui/theme';
 
+type ReviewFilter = 'pending' | 'approved' | 'all';
 export default function Time() {
-  useExtras();
   const C = useTheme().colors;
   const { language, t } = useLanguage();
   const { role, punches, shifts, workers, selectedWorkerId, currency, approvals, reviewTime } = useStore();
-  const { width } = useWindowDimensions();
-  const desktop = Platform.OS === 'web' && width >= 1200;
+  const now = useNow();
   const [reviewMessage, setReviewMessage] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [filter, setFilter] = useState<ReviewFilter>('pending');
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [month, setMonth] = useState(() => localDate(new Date()).slice(0, 7));
-  const currentMonth = localDate(new Date()).slice(0, 7);
-  const monthDate = new Date(`${month}-01T12:00:00`);
-  const monthLabel = monthDate.toLocaleDateString(language, { month: 'long', year: 'numeric' });
+  const currentMonth = localDate(new Date(now)).slice(0, 7);
+  const monthLabel = new Date(`${month}-01T12:00:00`).toLocaleDateString(language, { month: 'long', year: 'numeric' });
   const workDate = (p: typeof punches[number]) => p.workDate ?? localDate(new Date(p.at));
   const visible = punches.filter(p => (role !== 'worker' || p.workerId === selectedWorkerId) && workDate(p).startsWith(month));
-  const entries = [...visible].sort((a, b) => b.at.localeCompare(a.at));
   const dates = [...new Set(visible.map(workDate))].sort().reverse();
   const rows = dates.flatMap(date => workers.filter(w => visible.some(p => p.workerId === w.id && workDate(p) === date)).map(worker => {
-    const events = visible.filter(p => p.workerId === worker.id && workDate(p) === date);
-    const open = shifts.some(shift => [...events].reverse().find(p => p.shiftId === shift.id)?.type === 'in');
+    const events = visible.filter(p => p.workerId === worker.id && workDate(p) === date).sort((a, b) => a.at.localeCompare(b.at));
+    const lastByShift = new Map(events.map(p => [p.shiftId, p]));
+    const openEvents = [...lastByShift.values()].filter(p => p.type === 'in');
+    const missingCheckout = openEvents.some(p => {
+      const shift = shifts.find(s => s.id === p.shiftId);
+      return shift ? shiftHasEnded(shift, now) : date < localDate(new Date(now));
+    });
     const late = shifts.filter(sh => sh.date === date).reduce((sum, sh) => sum + lateMinutes(sh, punches, worker.id), 0);
-    return { worker, date, late, pay: paySummary(punches, worker, date), open, approved: approvals.some(a => a.workerId === worker.id && a.date === date) };
+    return { worker, date, events, late, pay: paySummary(punches, worker, date), open: openEvents.length > 0, missingCheckout, approved: approvals.some(a => a.workerId === worker.id && a.date === date) };
   }));
   const actual = rows.reduce((sum, row) => sum + row.pay.actualSeconds, 0);
   const payable = rows.reduce((sum, row) => sum + row.pay.payableSeconds, 0);
   const totalCents = rows.reduce((sum, row) => sum + row.pay.earningsCents, 0);
+  const priority = (row: typeof rows[number]) => row.missingCheckout ? 3 : row.pay.excessMinutes > 0 ? 2 : row.late ? 1 : 0;
+  const filtered = rows.filter(row => role !== 'admin' || filter === 'all' || (filter === 'approved' ? row.approved : !row.approved));
+  if (role === 'admin' && filter === 'pending') filtered.sort((a, b) => priority(b) - priority(a) || b.date.localeCompare(a.date));
   const changeMonth = (offset: number) => {
     const next = new Date(`${month}-01T12:00:00`);
     next.setMonth(next.getMonth() + offset);
     setMonth(localDate(next).slice(0, 7));
     setReviewMessage('');
+    setExpanded(null);
   };
   const exportCsv = async () => {
     const csv = [csvRow(['worker', 'date', 'actual_seconds', 'payable_seconds', 'over_limit_minutes', 'estimated_pay', 'currency', 'approval']), ...rows.map(row => csvRow([row.worker.name, row.date, row.pay.actualSeconds, row.pay.payableSeconds, row.pay.excessMinutes, (row.pay.earningsCents / 100).toFixed(2), currency, row.approved ? 'approved' : 'pending']))].join('\n');
-    if (Platform.OS === 'web') downloadCsv(`tempo-payroll-${month}.csv`, csv);
-    else await Share.share({ message: csv, title: `${monthLabel} Tempo payroll CSV` });
+    try {
+      if (Platform.OS === 'web') downloadCsv(`tempo-payroll-${month}.csv`, csv);
+      else await Share.share({ message: csv, title: `${monthLabel} Tempo payroll CSV` });
+    } catch { setReviewMessage('Could not export. Try again.'); }
   };
   const review = async (workerId: string, date: string, approve: boolean) => {
-    const result = await reviewTime(workerId, date, approve);
-    setReviewMessage(result.message);
+    if (busy) return;
+    setBusy(`${workerId}-${date}`);
+    try { const result = await reviewTime(workerId, date, approve); setReviewMessage(result.message); }
+    catch { setReviewMessage('Could not save approval. Try again.'); }
+    finally { setBusy(null); }
   };
   return <Screen title={role === 'admin' ? 'Time & pay' : 'My hours & pay'} subtitle="A clear record of time worked and estimated earnings.">
-    <View style={{ flexDirection: desktop ? 'row' : 'column', justifyContent: 'space-between', gap: 12, marginBottom: 20 }}>
-    <Card style={{ width: desktop ? 340 : '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: desktop ? 0 : 11, padding: 12 }}><Pressable accessibilityRole="button" accessibilityLabel="Previous month" onPress={() => changeMonth(-1)} style={{ width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: C.mint }}><ChevronLeft color={C.green} size={20} /></Pressable><View style={{ alignItems: 'center' }}><Text style={{ color: C.muted, fontSize: 10, fontWeight: '500', letterSpacing: 1 }}>{t('PAY PERIOD')}</Text><Text style={{ color: C.ink, fontSize: 17, fontWeight: '500', marginTop: 2 }}>{monthLabel}</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Next month" accessibilityState={{ disabled: month >= currentMonth }} disabled={month >= currentMonth} onPress={() => changeMonth(1)} style={{ width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: month >= currentMonth ? C.bg : C.mint }}><ChevronRight color={month >= currentMonth ? C.muted : C.green} size={20} /></Pressable></Card>
-    {role === 'admin' && <View style={{ alignSelf: desktop ? 'center' : 'stretch' }}><Button small={desktop} label={`Download ${monthLabel} CSV`} variant="outline" icon={<Download color={C.green} size={17} />} onPress={exportCsv} /></View>}
+    <Card style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, marginBottom: 16 }}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Previous month" onPress={() => changeMonth(-1)} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}><ChevronLeft color={C.green} size={22} /></Pressable>
+      <View style={{ flex: 1, alignItems: 'center' }}><Text style={{ color: C.muted, fontSize: 12 }}>PAY PERIOD</Text><Text style={{ fontSize: 18, fontWeight: '600', marginTop: 4 }}>{monthLabel}</Text></View>
+      <Pressable accessibilityRole="button" accessibilityLabel="Next month" accessibilityState={{ disabled: month >= currentMonth }} disabled={month >= currentMonth} onPress={() => changeMonth(1)} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center', opacity: month >= currentMonth ? .4 : 1 }}><ChevronRight color={C.green} size={22} /></Pressable>
+    </Card>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+      {[{ label: 'Estimated earnings', value: formatMoney(totalCents, currency) }, { label: 'Recorded hours', value: payTimeLabel(actual) }, { label: 'Payable hours', value: payTimeLabel(payable) }].map((stat, index) => <Card key={stat.label} style={{ flexGrow: 1, flexBasis: index === 0 ? 260 : 140, backgroundColor: index === 0 ? C.green : C.surface }}><Text style={{ fontSize: 14, color: index === 0 ? C.onGreen : C.muted }}>{stat.label}</Text><Text style={{ fontSize: 28, fontWeight: '600', color: index === 0 ? C.onGreen : C.ink, marginTop: 8 }}>{stat.value}</Text></Card>)}
     </View>
-    <View style={{ flexDirection: desktop ? 'row' : 'column', gap: desktop ? 16 : 0, alignItems: 'stretch' }}>
-    <Card style={{ flex: desktop ? 1 : undefined, backgroundColor: C.green, borderColor: C.green, padding: 22 }}><Text style={{ color: C.onGreen, fontSize: 12, fontWeight: '500' }}>ESTIMATED PAY · {monthLabel.toUpperCase()}</Text><Text style={{ color: C.onGreen, fontSize: 37, fontWeight: '500', letterSpacing: -.8, marginTop: 10 }}>{formatMoney(totalCents, currency)}</Text><Text style={{ color: C.onGreen, fontSize: 13, marginTop: 3 }}>{payTimeLabel(payable)} payable of {payTimeLabel(actual)} recorded</Text></Card>
-    <Card style={{ flex: desktop ? 1 : undefined, flexDirection: 'row', alignItems: 'center', marginTop: desktop ? 0 : 11 }}><View style={{ width: 39, height: 39, borderRadius: 12, backgroundColor: C.mint, alignItems: 'center', justifyContent: 'center' }}><Wallet color={C.green} size={19} /></View><Text style={{ flex: 1, color: C.muted, fontSize: 12, lineHeight: 18, marginLeft: 12 }}>{t('Pay is capped at 10 hours per worker each day. Extra time stays in the log for manager review.')}</Text></Card>
-    </View>
-    <View style={{ flexDirection: desktop ? 'row' : 'column', alignItems: 'flex-start', gap: desktop ? 20 : 0 }}>
-    <View style={{ flex: desktop ? 1 : undefined, width: desktop ? undefined : '100%', minWidth: 0 }}>
-    <Section title="Daily summaries" />
-    {!!reviewMessage && <Text style={{ color: C.green, fontSize: 12, marginBottom: 10 }}>{reviewMessage}</Text>}
-    {rows.length ? rows.map(row => <Card key={`${row.worker.id}-${row.date}`} style={{ marginBottom: 9, padding: 16 }}><View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><View><Text style={{ color: C.ink, fontWeight: '500', fontSize: 14 }}>{role === 'admin' ? row.worker.name : formatDay(row.date)}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 3 }}>{role === 'admin' ? `${formatDay(row.date)} · ` : ''}{payTimeLabel(row.pay.payableSeconds)} payable{row.late ? ` · ${row.late} min late` : ''}</Text></View><Text style={{ color: C.green, fontWeight: '500', fontSize: 15 }}>{formatMoney(row.pay.earningsCents, currency)}</Text></View><View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 10 }}><Text style={{ flex: 1, minWidth: 150, color: row.approved ? C.green : C.muted, fontSize: 12, fontWeight: '500' }}>{row.approved ? '✓ Manager approved' : row.open ? 'Clocked in · approval pending' : 'Awaiting manager approval'}</Text>{role === 'admin' && !row.open && <Button small variant={row.approved ? 'outline' : 'light'} label={row.approved ? 'Undo approval' : 'Approve time'} icon={row.approved ? undefined : <CheckCircle2 size={15} color={C.green} />} onPress={() => void review(row.worker.id, row.date, !row.approved)} />}</View>{row.pay.excessMinutes > 0 && <Text style={{ color: C.red, fontSize: 11, marginTop: 9 }}>{hoursLabel(row.pay.excessMinutes)} over limit · review required</Text>}</Card>) : <Empty title="No time logged this month" detail="Use the month controls above to review earlier time and pay." />}
-    </View>
-    <View style={{ width: desktop ? 360 : '100%', minWidth: 0 }}>
-    <Section title="Clock events" /><Text style={{ color: C.muted, fontSize: 12, marginBottom: 13 }}>{t('Timestamps use this device’s local time zone.')}</Text>
-    {!!entries.length && <Card style={{ padding: 0, overflow: 'hidden' }}>{entries.map((p, i) => { const worker = workers.find(w => w.id === p.workerId); const shift = shifts.find(s => s.id === p.shiftId); return <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderTopWidth: i ? 1 : 0, borderTopColor: C.line }}><View style={{ backgroundColor: p.type === 'in' ? C.mint : C.orange, width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>{p.type === 'in' ? <LogIn size={18} color={C.green} /> : <LogOut size={18} color={C.warningText} />}</View><View style={{ flex: 1, marginLeft: 12 }}><Text style={{ color: C.ink, fontWeight: '500', fontSize: 13 }}>{worker?.name} checked {p.type}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{shift?.site}</Text></View><Text style={{ color: C.muted, fontSize: 12 }}>{formatTime(p.at)}</Text></View>; })}</Card>}
-    </View>
-    </View>
+    <Text style={{ color: C.muted, fontSize: 14, lineHeight: 22, marginTop: 14 }}>Pay is capped at 10 hours per worker each day. Extra time stays in the log for manager review.</Text>
+    <Section title={role === 'admin' ? 'Review time' : 'Daily summaries'} />
+    {role === 'admin' && <View style={{ gap: 12, marginBottom: 16 }}>
+      <ChoiceChips label="Filter time records" value={filter} onChange={value => setFilter(value as ReviewFilter)} options={[{ value: 'pending', label: `${t('Needs review')} (${rows.filter(row => !row.approved).length})` }, { value: 'approved', label: `${t('Approved')} (${rows.filter(row => row.approved).length})` }, { value: 'all', label: `${t('All')} (${rows.length})` }]} />
+      <Button small label="Export month CSV" variant="outline" icon={<Download color={C.green} size={18} />} onPress={() => void exportCsv()} />
+    </View>}
+    {!!reviewMessage && <Text accessibilityLiveRegion="polite" style={{ fontSize: 14, marginBottom: 12 }}>{reviewMessage}</Text>}
+    {filtered.map(row => {
+      const key = `${row.worker.id}-${row.date}`;
+      const isExpanded = expanded === key;
+      const status = row.missingCheckout ? 'Missing clock-out' : row.approved ? 'Manager approved' : row.open ? 'Clocked in' : 'Awaiting manager approval';
+      return <Card key={key} style={{ marginBottom: 12, padding: 18 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 10 }}>
+          <View style={{ flex: 1, minWidth: 160 }}><Text style={{ fontSize: 16, fontWeight: '600' }}>{role === 'admin' ? row.worker.name : formatDay(row.date)}</Text><Text style={{ color: C.muted, fontSize: 14, marginTop: 5 }}>{role === 'admin' ? `${formatDay(row.date)} · ` : ''}{payTimeLabel(row.pay.payableSeconds)} {t('payable')}</Text></View>
+          <Text style={{ color: C.green, fontSize: 18, fontWeight: '600' }}>{formatMoney(row.pay.earningsCents, currency)}</Text>
+        </View>
+        <View style={{ marginTop: 12, gap: 8 }}><Pill tone={row.missingCheckout ? 'orange' : row.approved ? 'green' : 'gray'}>{status}</Pill>
+          {row.pay.excessMinutes > 0 && <Text style={{ color: C.red, fontSize: 14 }}>{hoursLabel(row.pay.excessMinutes)} · <Text>Over limit · review required</Text></Text>}
+          {!!row.late && <Text style={{ color: C.warningText, fontSize: 14 }}>{row.late} <Text>min late</Text></Text>}
+          {row.missingCheckout && <Text style={{ color: C.warningText, fontSize: 14, lineHeight: 22 }}>Confirm the clock-out with the site lead before approving.</Text>}
+        </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 10 }}>
+          <Pressable accessibilityRole="button" accessibilityState={{ expanded: isExpanded }} onPress={() => setExpanded(isExpanded ? null : key)} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={{ color: C.green, fontSize: 14 }}>{isExpanded ? 'Hide clock events' : 'View clock events'}</Text><ChevronDown size={18} color={C.green} style={{ transform: [{ rotate: isExpanded ? '180deg' : '0deg' }] }} /></Pressable>
+          {role === 'admin' && !row.open && <Button small disabled={!!busy} variant={row.approved ? 'outline' : 'light'} label={busy === key ? 'Saving…' : row.approved ? 'Undo approval' : 'Approve time'} icon={row.approved ? undefined : <CheckCircle2 size={16} color={C.green} />} onPress={() => void review(row.worker.id, row.date, !row.approved)} />}
+        </View>
+        {isExpanded && <View style={{ borderTopWidth: 1, borderTopColor: C.line, marginTop: 8, paddingTop: 12, gap: 12 }}>
+          <Text style={{ color: C.muted, fontSize: 13 }}>Timestamps use this device’s local time zone.</Text>
+          {row.events.map(event => <View key={event.id} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}><View style={{ flex: 1 }}><Text style={{ fontSize: 14, fontWeight: '500' }}>{event.type === 'in' ? 'Clock in' : 'Clock out'}</Text><Text style={{ color: C.muted, fontSize: 14, marginTop: 3 }}>{shifts.find(s => s.id === event.shiftId)?.site}</Text></View><Text style={{ fontSize: 14 }}>{formatTime(event.at)}</Text></View>)}
+        </View>}
+      </Card>;
+    })}
+    {!filtered.length && <Empty title={rows.length ? 'No matching records' : 'No time logged this month'} detail={rows.length ? 'Choose another filter to see more records.' : 'Use the month controls above to review earlier time and pay.'} action={rows.length ? 'Show all records' : 'Previous month'} onAction={() => rows.length ? setFilter('all') : changeMonth(-1)} />}
   </Screen>;
 }

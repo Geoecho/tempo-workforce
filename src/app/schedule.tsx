@@ -1,7 +1,7 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Download } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Platform, Share, View } from 'react-native';
+import { Platform, Share, View, useWindowDimensions } from 'react-native';
 import { Pressable } from '../ui/LocalizedPressable';
 import { Text } from '../ui/LocalizedText';
 import { csvRow, downloadCsv } from '../lib/csv';
@@ -12,6 +12,7 @@ import { Button, Empty, Screen } from '../ui/components';
 import { ShiftCard } from '../ui/ShiftCard';
 import { ContentGrid } from '../ui/ContentGrid';
 import { CalendarView } from '../ui/CalendarView';
+import { ChoiceChips } from '../ui/ChoiceChips';
 import { useTheme } from '../ui/theme';
 
 export default function Schedule() {
@@ -19,13 +20,19 @@ export default function Schedule() {
   const { t } = useLanguage();
   const { role, shifts, workers, punches, selectedWorkerId } = useStore();
   type Tab = 'today' | 'week' | 'month' | 'calendar' | 'history';
-  const [filter, setFilter] = useState<Tab>('calendar');
+  const { view } = useLocalSearchParams<{ view?: string }>();
+  const { width } = useWindowDimensions();
+  const [filter, setFilter] = useState<Tab>(view === 'today' ? 'today' : role === 'worker' && (Platform.OS !== 'web' || width < 960) ? 'month' : 'calendar');
+  const [site, setSite] = useState('');
+  const [team, setTeam] = useState('');
+  const sites = [...new Set(shifts.filter(s => !s.archived).map(s => s.site))];
+  const teams = [...new Set(workers.filter(w => !w.archived).map(w => w.team))];
   const mine = (s: typeof shifts[number]) => role === 'admin' || s.workerIds.includes(selectedWorkerId) || punches.some(p => p.shiftId === s.id && p.workerId === selectedWorkerId);
   const dayOffset = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return localDate(d); };
   const lastDate = filter === 'today' ? dayOffset(0) : filter === 'week' ? dayOffset(6) : dayOffset(30);
   const isUpcoming = (s: typeof shifts[number]) => !s.archived && (!shiftHasEnded(s) || (s.date === today() && shiftHasOpenPunch(s.id, punches)));
   const filtered = shifts
-    .filter(s => mine(s) && (filter === 'history'
+    .filter(s => mine(s) && (role !== 'admin' || ((!site || s.site === site) && (!team || s.team === team || s.workerIds.some(id => workers.some(w => w.id === id && w.team === team))))) && (filter === 'history'
       ? shiftHasEnded(s) && !(s.date === today() && shiftHasOpenPunch(s.id, punches)) && (!s.archived || punches.some(p => p.shiftId === s.id))
       : filter === 'calendar' ? !s.archived : isUpcoming(s) && s.date <= lastDate))
     .sort((a, b) => filter === 'history' ? b.date.localeCompare(a.date) || b.start.localeCompare(a.start) : a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
@@ -52,11 +59,12 @@ export default function Schedule() {
     title={role === 'admin' ? 'Shifts' : 'My shifts'}
     subtitle={role === 'admin' ? 'Plan work and review completed shifts.' : 'Your next shifts and recorded history.'}
   >
+    {role === 'admin' && <View style={{ marginBottom: 16, gap: 8 }}><Button label="Create shift" onPress={() => router.push('/new-shift')} /><ChoiceChips label="Filter by site" value={site} onChange={setSite} options={[{ value: '', label: 'All sites' }, ...sites.map(value => ({ value, label: value }))]} /><ChoiceChips label="Filter by team" value={team} onChange={setTeam} options={[{ value: '', label: 'All teams' }, ...teams.map(value => ({ value, label: value }))]} /></View>}
     <View style={{ flexDirection: 'row', backgroundColor: C.subtle, borderRadius: 14, padding: 4, marginBottom: 14 }}>
-      {([['calendar', 'Calendar'], ['list', 'List']] as const).map(([key, label]) => { const on = (key === 'calendar') === (filter === 'calendar'); return <Pressable key={key} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => setFilter(key === 'calendar' ? 'calendar' : filter === 'calendar' ? 'today' : filter)} style={{ flex: 1, minHeight: 42, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? C.surface : 'transparent', borderWidth: on ? 1 : 0, borderColor: C.line }}><Text style={{ color: on ? C.green : C.muted, fontWeight: '600', fontSize: 14 }}>{t(label)}</Text></Pressable>; })}
+      {([['calendar', 'Calendar'], ['list', 'List']] as const).map(([key, label]) => { const on = (key === 'calendar') === (filter === 'calendar'); return <Pressable key={key} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => setFilter(key === 'calendar' ? 'calendar' : filter === 'calendar' ? 'month' : filter)} style={{ flex: 1, minHeight: 48, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? C.surface : 'transparent', borderWidth: on ? 1 : 0, borderColor: C.line }}><Text style={{ color: on ? C.green : C.muted, fontWeight: '600', fontSize: 14 }}>{t(label)}</Text></Pressable>; })}
     </View>
     {filter !== 'calendar' && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-      {(['today', 'week', 'month', 'history'] as const).map(item => <Pressable key={item} onPress={() => setFilter(item)} accessibilityRole="tab" accessibilityState={{ selected: filter === item }} style={{ backgroundColor: filter === item ? C.green : C.surface, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: filter === item ? C.green : C.line }}><Text style={{ color: filter === item ? C.onGreen : C.muted, fontWeight: '500', fontSize: 13 }}>{t(item === 'today' ? 'Today' : item === 'week' ? 'Week' : item === 'month' ? 'Month' : 'History')}</Text></Pressable>)}
+      {(['today', 'week', 'month', 'history'] as const).map(item => <Pressable key={item} onPress={() => setFilter(item)} accessibilityRole="tab" accessibilityState={{ selected: filter === item }} style={{ backgroundColor: filter === item ? C.green : C.surface, paddingHorizontal: 14, minHeight: 48, justifyContent: 'center', paddingVertical: 9, borderRadius: 24, borderWidth: 1, borderColor: filter === item ? C.green : C.line }}><Text style={{ color: filter === item ? C.onGreen : C.muted, fontWeight: '500', fontSize: 13 }}>{t(item === 'today' ? 'Today' : item === 'week' ? '7 days' : item === 'month' ? '30 days' : 'History')}</Text></Pressable>)}
     </View>}
     {filter !== 'calendar' && <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 13 }}>
       <Text style={{ color: C.ink, fontSize: 16, fontWeight: '500' }}>{filtered.length} {t('Shifts').toLowerCase()}</Text>
@@ -66,6 +74,6 @@ export default function Schedule() {
       : dayGroups.length ? dayGroups.map(group => <View key={group.date} style={{ marginBottom: 8 }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 6, marginBottom: 10 }}><Text style={{ color: C.ink, fontSize: 15, fontWeight: '600' }}>{dayLabel(group.date)}</Text><Text style={{ color: C.muted, fontSize: 12 }}>{group.shifts.length} {t('Shifts').toLowerCase()}</Text></View>
         <ContentGrid>{group.shifts.map(shift => <ShiftCard key={shift.id} shift={shift} compact />)}</ContentGrid>
-      </View>) : <Empty title={filter === 'today' ? 'Nothing today' : filter === 'week' ? 'Nothing in the next 7 days' : 'Nothing in the next 30 days'} detail="New assignments will appear here when they're scheduled." />}
+      </View>) : <Empty title={filter === 'today' ? 'Nothing today' : filter === 'week' ? 'Nothing in the next 7 days' : 'Nothing in the next 30 days'} detail="New assignments will appear here when they're scheduled." action={role === 'admin' ? 'Create shift' : 'View calendar'} onAction={() => role === 'admin' ? router.push('/new-shift') : setFilter('calendar')} />}
   </Screen>;
 }

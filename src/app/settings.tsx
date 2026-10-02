@@ -1,6 +1,7 @@
+import { router } from 'expo-router';
 import { MonitorSmartphone, Moon, RotateCcw, ShieldCheck, Sun, UserRound } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Alert, Platform, Share, useWindowDimensions, View } from 'react-native';
+import { Alert, Platform, useWindowDimensions, View } from 'react-native';
 import { Pressable } from '../ui/LocalizedPressable';
 import { Text, TextInput } from '../ui/LocalizedText';
 import { CURRENCIES, initialState } from '../lib/data';
@@ -13,14 +14,10 @@ import { ThemePreference, useTheme } from '../ui/theme';
 export default function Settings() {
   const { colors: C, preference, setPreference } = useTheme();
   const { language, setLanguage, t } = useLanguage();
-  const { role, setRole, selectedWorkerId, setSelectedWorker, workers, shifts, currency, setCurrency, setWorkspaceName, workspaceName, punches, restoreWorker, restoreShift, reset, online, syncError, accountEmail, inviteWorker, signOut } = useStore();
+  const { role, setRole, selectedWorkerId, setSelectedWorker, workers, shifts, currency, setCurrency, setWorkspaceName, workspaceName, punches, restoreWorker, restoreShift, reset, online, syncError, accountEmail, signOut } = useStore();
   const { width } = useWindowDimensions();
   const desktop = Platform.OS === 'web' && width >= 1200;
   const [showAllCurrencies, setShowAllCurrencies] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteWorkerId, setInviteWorkerId] = useState('');
-  const [inviteMessage, setInviteMessage] = useState('');
-  const [inviteInstructions, setInviteInstructions] = useState('');
   const [name, setName] = useState(workspaceName ?? 'Tempo workspace');
   const current = workers.find(w => w.id === selectedWorkerId && !w.archived) ?? workers.find(w => !w.archived) ?? { ...initialState.workers[0], name: workspaceName || 'Tempo', initials: (workspaceName || 'Tempo').slice(0, 1).toUpperCase() };
   const confirmReset = () => {
@@ -53,16 +50,7 @@ export default function Settings() {
       {syncError && <Text style={{ color: C.red, marginTop: 10, fontSize: 12 }}>Sync error: {syncError}</Text>}
       <Pressable accessibilityRole="button" onPress={() => void signOut()} style={{ marginTop: 15, minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: C.red, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: C.red, fontWeight: '500', fontSize: 15 }}>{t('Sign out')}</Text></Pressable>
     </Card></>}
-    {online && role === 'admin' && <><Section title="Invite a worker" /><Card>
-      <Text style={{ color: C.muted, fontSize: 12, marginBottom: 12 }}>Choose a worker profile, then save the email they will use to create an account.</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 12 }}>
-        {workers.filter(w => !w.archived).map(w => <Pressable key={w.id} onPress={() => setInviteWorkerId(w.id)} style={{ backgroundColor: inviteWorkerId === w.id ? C.green : C.mint, paddingHorizontal: 11, paddingVertical: 9, borderRadius: 10 }}><Text style={{ color: inviteWorkerId === w.id ? C.onGreen : C.green, fontWeight: '500' }}>{w.name}</Text></Pressable>)}
-      </View>
-      <TextInput accessibilityLabel="Worker email" autoCapitalize="none" keyboardType="email-address" placeholder="worker@example.com" placeholderTextColor={C.placeholder} value={inviteEmail} onChangeText={setInviteEmail} style={{ borderWidth: 1, borderColor: C.line, borderRadius: 11, padding: 12, color: C.ink }} />
-      <Pressable onPress={async () => { const email = inviteEmail.trim().toLowerCase(); const result = await inviteWorker(inviteWorkerId, email); setInviteMessage(result.message); if (result.ok) { setInviteInstructions(t(`You're invited to ${workspaceName || 'Tempo'}! Open https://tempo-workforce.vercel.app/ and choose “Join an existing team”. Create your account with ${email}, then confirm your email and sign in.`)); setInviteEmail(''); } }} style={{ backgroundColor: C.green, borderRadius: 11, padding: 12, marginTop: 11, alignItems: 'center' }}><Text style={{ color: C.onGreen, fontWeight: '500' }}>{t('Save invitation')}</Text></Pressable>
-      {!!inviteMessage && <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, marginTop: 10 }}>{inviteMessage}</Text>}
-      {!!inviteInstructions && <><Text selectable style={{ color: C.ink, fontSize: 12, lineHeight: 19, marginTop: 11 }}>{inviteInstructions}</Text><Pressable accessibilityRole="button" onPress={async () => { try { if (Platform.OS === 'web') { await navigator.clipboard.writeText(inviteInstructions); setInviteMessage('Join instructions copied.'); } else await Share.share({ message: inviteInstructions }); } catch { setInviteMessage('Select and copy the instructions above.'); } }} style={{ alignSelf: 'flex-start', paddingVertical: 11 }}><Text style={{ color: C.green, fontWeight: '500' }}>{Platform.OS === 'web' ? 'Copy join instructions' : 'Share join instructions'}</Text></Pressable></>}
-    </Card></>}
+    {online && role === 'admin' && <View style={{ marginTop: 20 }}><Button label="Manage team invitations" variant="outline" onPress={() => router.push('/team')} /></View>}
     {!online && <><Section title="View as" /><Text style={{ color: C.muted, fontSize: 13, lineHeight: 19, marginBottom: 13 }}>{t('Switch roles to explore both sides of the workflow.')}</Text>
     <View style={{ flexDirection: 'row', gap: 10 }}>
       <Pressable onPress={() => setRole('admin')} style={{ flex: 1 }}><Card style={{ borderColor: role === 'admin' ? C.green : C.line, backgroundColor: role === 'admin' ? C.mint : C.surface }}><ShieldCheck size={21} color={C.green} /><Text style={{ color: C.ink, fontWeight: '500', marginTop: 13 }}>{t('Admin')}</Text><Text style={{ color: C.muted, fontSize: 11, marginTop: 3 }}>{t('Plan & oversee')}</Text></Card></Pressable>
