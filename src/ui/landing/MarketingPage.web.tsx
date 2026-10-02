@@ -68,13 +68,13 @@ export default function MarketingPage() {
     <main>
       <section className="tempo-hero tempo-container">
         <motion.div initial={{ y: reduced ? 0 : 20 }} animate={{ y: 0 }} transition={{ duration: .9, ease: [.22, 1, .36, 1] }}>
-          <p className="tempo-eyebrow"><span className="tempo-status-dot" />{t('People. Time. In sync.')}</p>
+          <p className="tempo-eyebrow">{t('People. Time. In sync.')}</p>
           <h1>{t('Every shift,')}<br /><span>{t('in sync.')}</span></h1>
         </motion.div>
         <motion.div className="tempo-hero-side" initial={{ y: reduced ? 0 : 35 }} animate={{ y: 0 }} transition={{ duration: .95, delay: .12, ease: [.22, 1, .36, 1] }}>
           <p>{t('Your team has enough to do. Give them one simple place for shifts, hours, and pay.')}</p>
           <button className="tempo-button" onClick={begin}>{t('Start your workspace')}<Icon /></button>
-          <button className="tempo-text-link" onClick={() => jump('platform')}>{t('Explore the platform')}<Icon name="down" size={17} /></button>
+          <div className="tempo-hero-links"><button className="tempo-text-link" onClick={() => router.replace('/start?intent=worker')}>{t('Join a team')}<Icon size={16} /></button><button className="tempo-text-link" onClick={() => jump('platform')}>{t('Explore the platform')}<Icon name="down" size={16} /></button></div>
         </motion.div>
       </section>
 

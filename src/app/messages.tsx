@@ -1,10 +1,11 @@
-import { ArrowDown, MoreHorizontal, Search, Send, Smile, UserRound, UsersRound, X } from 'lucide-react-native';
+import { ArrowDown, Search, Send, UserRound, UsersRound, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, TextInput, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Keyboard, Platform, ScrollView, TextInput, View, useWindowDimensions } from 'react-native';
 import { useStore } from '../lib/store';
 import { Pressable } from '../ui/LocalizedPressable';
 import { Text } from '../ui/LocalizedText';
 import { Avatar, Card, Screen } from '../ui/components';
+import { RevealPanel } from '../ui/RevealPanel';
 import { useTheme } from '../ui/theme';
 
 export default function Messages() {
@@ -12,16 +13,22 @@ export default function Messages() {
   const { messages, sendMessage, markMessageRead, role, selectedWorkerId, workers } = useStore();
   const { width } = useWindowDimensions();
   const desktop = Platform.OS === 'web' && width >= 960;
-  const [text, setText] = useState('');
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [sendErrors, setSendErrors] = useState<Record<string, string>>({});
+  const [inputHeight, setInputHeight] = useState(48);
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
+  const stickToBottom = useRef(true);
+  const reading = useRef(new Set<string>());
   const [target, setTarget] = useState<string>('all');
-  const [chatMenuOpen, setChatMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [emojiOpen, setEmojiOpen] = useState(false);
+  const text = drafts[target] ?? '';
+  const setText = (value: string) => setDrafts(current => ({ ...current, [target]: value }));
   const scrollRef = useRef<ScrollView>(null);
+  const searchRef = useRef<TextInput>(null);
   const inputRef = useRef<TextInput>(null);
   const keepComposerFocus = Platform.OS === 'web' ? { onMouseDown: (event: React.MouseEvent) => event.preventDefault() } : {};
-  const emojis = ['😊', '😂', '❤️', '👍', '🎉', '🙌', '👏', '🙏', '👀', '✅', '🔥', '💬'];
   const activeWorkers = workers.filter(worker => !worker.archived);
   const conversations = role === 'admin'
     ? [{ id: 'all', name: 'All team', worker: undefined }, ...activeWorkers.map(worker => ({ id: worker.id, name: worker.name, worker }))]
@@ -40,47 +47,60 @@ export default function Messages() {
   }, [relevantMessages, searchQuery]);
   const ownId = role === 'admin' ? 'admin' : selectedWorkerId;
   const send = async () => {
-    if (!text.trim()) return;
+    if (!text.trim() || sendingRef.current) return;
+    const conversation = target;
     const body = text;
-    setText('');
-    await sendMessage(target, body);
+    sendingRef.current = true;
+    setSending(true);
+    setSendErrors(current => ({ ...current, [conversation]: '' }));
+    inputRef.current?.focus();
+    try {
+      const result = await sendMessage(conversation, body);
+      if (!result.ok) throw new Error(result.message);
+      setDrafts(current => current[conversation] === body ? { ...current, [conversation]: '' } : current);
+      stickToBottom.current = true;
+    } catch (error) {
+      setSendErrors(current => ({ ...current, [conversation]: error instanceof Error ? error.message : 'Message was not sent. Try again.' }));
+    } finally { sendingRef.current = false; setSending(false); }
   };
   const getSenderName = (fromId: string) => fromId === 'admin' ? 'Admin' : workers.find(worker => worker.id === fromId)?.name || 'Unknown';
 
   useEffect(() => {
     relevantMessages.forEach(message => {
-      if (!message.readAt && message.from !== ownId) void markMessageRead(message.id);
+      if (!message.readAt && message.from !== ownId && !reading.current.has(message.id)) {
+        reading.current.add(message.id);
+        void markMessageRead(message.id).catch(() => reading.current.delete(message.id));
+      }
     });
   }, [relevantMessages, ownId, markMessageRead]);
 
   const selectConversation = (conversationId: string) => {
+    if (conversationId === target) return;
+    stickToBottom.current = true;
+    if (searchOpen) { searchRef.current?.blur(); Keyboard.dismiss(); }
+    setInputHeight(48);
     setTarget(conversationId);
-    setChatMenuOpen(false);
     setSearchOpen(false);
     setSearchQuery('');
-    setEmojiOpen(false);
   };
 
-  useEffect(() => {
-    const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
-    return () => clearTimeout(timer);
-  }, [relevantMessages.length, target]);
-
-  const chatOptions = <View style={{ position: 'relative', zIndex: 10 }}>
-    <Pressable accessibilityRole="button" accessibilityLabel="Chat options" accessibilityState={{ expanded: chatMenuOpen }} onPress={() => setChatMenuOpen(open => !open)} style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' }}>
-      <MoreHorizontal size={20} color={C.green} />
-    </Pressable>
-    {chatMenuOpen && <View style={{ position: 'absolute', top: 42, right: 0, width: 190, padding: 6, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, shadowColor: '#000', shadowOpacity: .1, shadowRadius: 12, elevation: 8 }}>
-      <Pressable accessibilityRole="button" onPress={() => { setChatMenuOpen(false); setSearchOpen(true); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 8 }}><Search size={16} color={C.green} /><Text style={{ color: C.ink, fontSize: 12 }}>Search messages</Text></Pressable>
-      <Pressable accessibilityRole="button" onPress={() => { setChatMenuOpen(false); setSearchOpen(false); setSearchQuery(''); setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 8 }}><ArrowDown size={16} color={C.green} /><Text style={{ color: C.ink, fontSize: 12 }}>Jump to latest</Text></Pressable>
-    </View>}
+  const closeSearch = () => { searchRef.current?.blur(); Keyboard.dismiss(); setSearchOpen(false); setSearchQuery(''); stickToBottom.current = true; };
+  const openSearch = () => { inputRef.current?.blur(); Keyboard.dismiss(); setSearchQuery(''); setSearchOpen(true); };
+  const chatOptions = <View style={{ flexDirection: 'row', gap: 4, flexShrink: 0 }}>
+    <Pressable accessibilityRole="button" accessibilityLabel={searchOpen ? 'Close message search' : 'Search messages'} accessibilityState={{ expanded: searchOpen }} onPress={searchOpen ? closeSearch : openSearch} style={{ paddingHorizontal: 14, height: 44, borderRadius: 12, borderWidth: 1.5, borderColor: searchOpen ? C.green : C.line, backgroundColor: searchOpen ? C.mint : C.surface, flexDirection: 'row', gap: 7, alignItems: 'center', justifyContent: 'center' }}><Search size={17} color={searchOpen ? C.green : C.ink} /><Text style={{ color: searchOpen ? C.green : C.ink, fontSize: 13, fontWeight: '600' }}>Search</Text></Pressable>
+    {!searchOpen && <Pressable accessibilityRole="button" accessibilityLabel="Jump to latest message" onPress={() => { stickToBottom.current = true; scrollRef.current?.scrollToEnd({ animated: false }); }} style={{ width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.line, backgroundColor: C.surface }}><ArrowDown size={20} color={C.green} /></Pressable>}
   </View>;
 
-  const searchBar = searchOpen && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: desktop ? 18 : 0, paddingVertical: 10, borderBottomWidth: desktop ? 1 : 0, borderBottomColor: C.line }}>
-    <Search size={17} color={C.muted} />
-    <TextInput autoFocus accessibilityLabel="Search messages" value={searchQuery} onChangeText={setSearchQuery} placeholder="Search this conversation" placeholderTextColor={C.placeholder} style={{ flex: 1, minWidth: 0, height: 36, color: C.ink, fontSize: 16 }} />
-    {!!searchQuery && <Text style={{ color: C.muted, fontSize: 11 }}>{visibleMessages.length} found</Text>}
-    <Pressable accessibilityRole="button" accessibilityLabel="Close message search" onPress={() => { setSearchOpen(false); setSearchQuery(''); }} style={{ width: 30, height: 30, alignItems: 'center', justifyContent: 'center' }}><X size={16} color={C.muted} /></Pressable>
+  const searchBar = searchOpen && <View style={{ padding: 12, marginBottom: desktop ? 0 : 10, backgroundColor: C.mint, borderBottomWidth: 1, borderBottomColor: C.line, gap: 10 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 12, paddingHorizontal: 12 }}>
+      <Search size={18} color={C.green} />
+      <TextInput ref={searchRef} autoFocus accessibilityLabel="Search this conversation" value={searchQuery} onChangeText={setSearchQuery} placeholder="Find a message..." placeholderTextColor={C.placeholder} returnKeyType="search" autoCorrect={false} style={{ flex: 1, minWidth: 0, height: 48, color: C.ink, fontSize: 16 }} />
+      {!!searchQuery && <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => { setSearchQuery(''); searchRef.current?.focus(); }} style={{ width: 36, height: 44, alignItems: 'center', justifyContent: 'center' }}><X size={17} color={C.muted} /></Pressable>}
+    </View>
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Text style={{ color: C.green, fontSize: 12 }}>{searchQuery.trim() ? `${visibleMessages.length} results` : 'Search messages'}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Close search" onPress={closeSearch} style={{ paddingHorizontal: 10, paddingVertical: 5 }}><Text style={{ color: C.green, fontSize: 13, fontWeight: '600' }}>Done</Text></Pressable>
+    </View>
   </View>;
 
   const renderConversationRow = (conversation: typeof conversations[number]) => {
@@ -99,57 +119,67 @@ export default function Messages() {
   };
 
   const renderThread = (wide: boolean) => <ScrollView
+    key={target}
     ref={scrollRef}
-    keyboardShouldPersistTaps="always"
-    keyboardDismissMode="none"
+    keyboardShouldPersistTaps="handled"
+    keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
     showsVerticalScrollIndicator={false}
-    onContentSizeChange={() => searchQuery.trim() ? scrollRef.current?.scrollTo({ y: 0, animated: false }) : scrollRef.current?.scrollToEnd({ animated: true })}
+    onContentSizeChange={() => searchQuery.trim() ? scrollRef.current?.scrollTo({ y: 0, animated: false }) : stickToBottom.current && scrollRef.current?.scrollToEnd({ animated: false })}
     onLayout={() => searchQuery.trim() ? scrollRef.current?.scrollTo({ y: 0, animated: false }) : scrollRef.current?.scrollToEnd({ animated: false })}
+    onScroll={event => { const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent; stickToBottom.current = contentSize.height - contentOffset.y - layoutMeasurement.height < 80; }}
+    scrollEventThrottle={32}
     style={{ flex: 1, minHeight: 0 }}
-    contentContainerStyle={{ padding: wide ? 24 : 0, paddingBottom: 20, flexGrow: visibleMessages.length ? 0 : 1, justifyContent: visibleMessages.length ? 'flex-start' : 'center' }}
+    contentContainerStyle={{ padding: wide ? 24 : 0, paddingBottom: 20, flexGrow: 1, justifyContent: visibleMessages.length ? (searchOpen ? 'flex-start' : 'flex-end') : 'center' }}
   >
     {visibleMessages.length === 0
       ? <Text style={{ color: C.muted, textAlign: 'center', marginTop: wide ? 0 : 40 }}>{searchQuery.trim() ? 'No matching messages.' : 'No messages yet. Start the conversation.'}</Text>
-      : visibleMessages.map(message => {
+      : visibleMessages.map((message, index) => {
         const isMe = message.from === ownId;
-        return <View key={message.id} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: wide ? '72%' : '85%', marginBottom: 14 }}>
-          <Text style={{ fontSize: 11, color: C.muted, marginBottom: 4, marginLeft: 4 }}>{getSenderName(message.from)}</Text>
-          <Card style={{ padding: 13, backgroundColor: isMe ? C.mint : C.surface, borderColor: isMe ? C.green : C.line, borderRadius: 16, borderBottomRightRadius: isMe ? 4 : 16, borderBottomLeftRadius: isMe ? 16 : 4 }}>
-            <Text style={{ color: C.ink, fontSize: 14, lineHeight: 21 }}>{message.body}</Text>
-          </Card>
-          <Text style={{ fontSize: 10, color: C.muted, alignSelf: 'flex-end', marginTop: 4 }}>{new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-        </View>;
+        const date = new Date(message.createdAt).toLocaleDateString();
+        const previousDate = index > 0 ? new Date(visibleMessages[index - 1].createdAt).toLocaleDateString() : null;
+        return <React.Fragment key={message.id}>
+          {date !== previousDate && <Text style={{ textAlign: 'center', color: C.muted, fontSize: 11, marginVertical: 12 }}>{new Date(message.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</Text>}
+          <View style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: wide ? '72%' : '85%', marginBottom: 14 }}>
+            {!isMe && <Text style={{ fontSize: 11, color: C.muted, marginBottom: 4, marginLeft: 34 }}>{getSenderName(message.from)}</Text>}
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+              {!isMe && (message.from === 'admin' ? <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: C.line, alignItems: 'center', justifyContent: 'center' }}><UserRound size={14} color={C.muted} /></View> : <View style={{ paddingBottom: 1 }}><Avatar worker={workers.find(w => w.id === message.from) || workers[0]} size={26} /></View>)}
+              <Card style={{ flexShrink: 1, padding: 13, backgroundColor: isMe ? C.green : C.bg, borderColor: isMe ? C.green : C.bg, borderRadius: 16, borderBottomRightRadius: isMe ? 4 : 16, borderBottomLeftRadius: isMe ? 16 : 4 }}>
+                <Text selectable style={{ color: isMe ? C.onGreen : C.ink, fontSize: 14, lineHeight: 21 }}>{message.body}</Text>
+              </Card>
+            </View>
+            <Text style={{ fontSize: 10, color: C.muted, alignSelf: isMe ? 'flex-end' : 'flex-start', marginLeft: isMe ? 0 : 34, marginTop: 4 }}>{new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+          </View></React.Fragment>;
       })}
   </ScrollView>;
 
-  const composer = <View style={{ padding: desktop ? 16 : 0, paddingBottom: 16, borderTopWidth: desktop ? 1 : 0, borderTopColor: C.line }}>
-    {emojiOpen && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, padding: 9, marginBottom: 12, borderWidth: 1, borderColor: C.line, borderRadius: 12, backgroundColor: C.bg }}>
-      {emojis.map(emoji => <Pressable key={emoji} accessibilityRole="button" accessibilityLabel={`Insert ${emoji} emoji`} {...keepComposerFocus} onPress={() => { setText(current => current + emoji); inputRef.current?.focus(); }} style={{ width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 8 }}><Text style={{ fontSize: 23 }}>{emoji}</Text></Pressable>)}
-    </View>}
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
-      <Pressable accessibilityRole="button" accessibilityLabel={emojiOpen ? 'Close emoji picker' : 'Choose emoji'} accessibilityState={{ expanded: emojiOpen }} {...keepComposerFocus} onPress={() => { setEmojiOpen(open => !open); inputRef.current?.focus(); }} style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: emojiOpen ? C.mint : C.bg, alignItems: 'center', justifyContent: 'center' }}><Smile size={20} color={C.green} /></Pressable>
+  const composer = <View style={{ padding: desktop ? 16 : 0, paddingBottom: 12, backgroundColor: C.surface, borderTopWidth: desktop ? 1 : 0, borderTopColor: C.line }}>
+    {!!sendErrors[target] && <Text accessibilityRole="alert" style={{ color: C.red, fontSize: 12, marginBottom: 8 }}>{sendErrors[target]} Your message is still here. Tap send to retry.</Text>}
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 9 }}>
       <TextInput
         ref={inputRef}
         value={text}
         onChangeText={setText}
+        onContentSizeChange={event => setInputHeight(Math.max(48, Math.min(120, event.nativeEvent.contentSize.height)))}
         onSubmitEditing={() => void send()}
         placeholder="Type a message..."
         placeholderTextColor={C.placeholder}
-        returnKeyType="send"
-        submitBehavior="submit"
+        multiline
+        returnKeyType="default"
+        submitBehavior="newline"
+        onFocus={() => { stickToBottom.current = true; requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false })); }}
         accessibilityLabel="Message"
-        style={{ flex: 1, minWidth: 0, height: 48, fontSize: 16, backgroundColor: C.field, borderRadius: 24, paddingHorizontal: 17, color: C.ink, borderWidth: 1, borderColor: C.line }}
+        style={{ flex: 1, minWidth: 0, height: inputHeight, minHeight: 48, maxHeight: 120, fontSize: 16, lineHeight: 22, paddingVertical: 12, textAlignVertical: 'top', backgroundColor: C.bg, borderRadius: 16, paddingHorizontal: 17, color: C.ink, borderWidth: 1, borderColor: C.line }}
       />
-      <Pressable accessibilityRole="button" accessibilityLabel="Send message" onPress={() => void send()} style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center' }}>
-        <Send size={19} color={C.onGreen} />
+      <Pressable accessibilityRole="button" accessibilityLabel={sending ? 'Sending message' : 'Send message'} accessibilityState={{ disabled: !text.trim() || sending, busy: sending }} disabled={!text.trim() || sending} {...keepComposerFocus} onPress={() => void send()} style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: C.green, opacity: !text.trim() || sending ? .5 : 1, alignItems: 'center', justifyContent: 'center' }}>
+        {sending ? <ActivityIndicator color={C.onGreen} /> : <Send size={19} color={C.onGreen} />}
       </Pressable>
     </View>
   </View>;
 
-  return <Screen back noScroll noNav wide={desktop} title="Messages" subtitle="Chat with your team">
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0} style={{ flex: 1, minHeight: 0 }}>
+  return <Screen back chat noScroll noNav wide={desktop} title="Messages">
+    <View style={{ flex: 1, minHeight: 0 }}>
       {desktop ? <View style={{ flex: 1, minHeight: 0, flexDirection: 'row', gap: 16 }}>
-        <View style={{ width: 290, minWidth: 250, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 17, padding: 12 }}>
+        <View style={{ width: 272, minWidth: 240, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 17, padding: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 7, paddingTop: 4, paddingBottom: 12 }}>
             <UsersRound size={17} color={C.green} />
             <Text style={{ color: C.ink, fontSize: 13, fontWeight: '600' }}>Conversations</Text>
@@ -172,21 +202,21 @@ export default function Messages() {
           </View>
           {searchBar}
           {renderThread(true)}
-          {composer}
+          {!searchOpen && composer}
         </View>
       </View> : <View style={{ flex: 1, minHeight: 0 }}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 12, zIndex: 10 }}>
-          <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {conversations.map(conversation => <Pressable key={conversation.id} onPress={() => selectConversation(conversation.id)} style={{ paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, backgroundColor: target === conversation.id ? C.green : C.surface, borderWidth: 1, borderColor: target === conversation.id ? C.green : C.line }}>
-              <Text style={{ color: target === conversation.id ? C.onGreen : C.ink, fontSize: 13, fontWeight: '500' }}>{conversation.id === 'all' ? 'All Team' : conversation.name.split(' ')[0]}</Text>
+          <ScrollView horizontal keyboardShouldPersistTaps="handled" showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
+            {conversations.map(conversation => <Pressable key={conversation.id} accessibilityRole="tab" accessibilityState={{ selected: target === conversation.id }} accessibilityLabel={conversation.name} onPress={() => selectConversation(conversation.id)} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, backgroundColor: target === conversation.id ? C.green : C.surface, borderWidth: 1, borderColor: target === conversation.id ? C.green : C.line }}>
+              <Text style={{ color: target === conversation.id ? C.onGreen : C.ink, fontSize: 13, fontWeight: '500' }}>{conversation.id === 'all' ? 'All Team' : conversation.name}</Text>
             </Pressable>)}
-          </View>
+          </ScrollView>
           {chatOptions}
         </View>
         {searchBar}
         {renderThread(false)}
-        {composer}
+        {!searchOpen && composer}
       </View>}
-    </KeyboardAvoidingView>
+    </View>
   </Screen>;
 }

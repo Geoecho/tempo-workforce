@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import React, { useContext, useEffect, useState } from 'react';
 import { activeBreak, BreakEvent, Currency, initialState, Message, parseQr, paySummary, punchCooldownSeconds, Punch, qrPayload, Shift, State, TimeApproval, teamNames, today, uid, Worker, MAX_PAID_MINUTES_PER_DAY } from './data';
 import { Context, Result } from './store-context';
@@ -20,7 +21,7 @@ function LocalStoreProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   useEffect(() => { Promise.all([AsyncStorage.getItem(KEY), AsyncStorage.getItem(BREAK_KEY), AsyncStorage.getItem(MSG_KEY)]).then(([raw, rawBreaks, rawMessages]) => { if (raw) { const saved = { ...initialState, ...JSON.parse(raw) } as State; saved.workers = saved.workers.map(w => ({ ...w, hourlyRate: w.hourlyRate ?? initialState.workers.find(seed => seed.id === w.id)?.hourlyRate ?? 0, phone: w.phone ?? initialState.workers.find(seed => seed.id === w.id)?.phone })); setState(saved); } if (rawBreaks) setBreaks(JSON.parse(rawBreaks)); if (rawMessages) setMessages(JSON.parse(rawMessages)); }).catch(() => {}).finally(() => setReady(true)); }, []);
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
     const handleStorage = (e: StorageEvent) => {
       if (e.key === KEY && e.newValue) setState(s => ({ ...s, ...JSON.parse(e.newValue!) }));
       if (e.key === MSG_KEY && e.newValue) setMessages(JSON.parse(e.newValue!));

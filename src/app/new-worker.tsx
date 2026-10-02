@@ -39,6 +39,7 @@ export default function NewWorker() {
     <Field label={`Hourly rate (${currency})`} value={rate} onChangeText={setRate} placeholder="e.g. 40.00" keyboardType="decimal-pad" />
     <Text style={{ color: C.ink, fontWeight: '500', fontSize: 13, marginBottom: 9 }}>Team</Text>
     <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 27 }}>{teams.map(t => <Pressable key={t} onPress={() => setTeam(t)} style={{ borderRadius: 20, paddingHorizontal: 15, paddingVertical: 10, backgroundColor: team === t ? C.green : C.surface, borderWidth: 1, borderColor: team === t ? C.green : C.line }}><Text style={{ color: team === t ? C.onGreen : C.muted, fontSize: 13, fontWeight: '500' }}>{t}</Text></Pressable>)}</View>
+    {!teams.length && <View style={{ marginBottom: 20 }}><Text style={{ color: C.muted, marginBottom: 10 }}>Create a team before adding your first member.</Text><Button label="Create a team" variant="light" onPress={() => router.push('/team')} /></View>}
     {!!error && <Text style={{ color: C.red, marginBottom: 13 }}>{error}</Text>}
     <Button label="Add team member" onPress={save} />
   </Screen>;

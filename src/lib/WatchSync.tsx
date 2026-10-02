@@ -1,4 +1,3 @@
-import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
@@ -33,6 +32,7 @@ export function WatchSync() {
     let removeListener: (() => void) | undefined;
     void import('@plevo/expo-watch-connectivity').then(async ({ WatchConnectivity }) => {
       if (!WatchConnectivity.isSupported) return;
+      const Notifications = await import('expo-notifications');
       const publish = () => {
         if (!cancelled && WatchConnectivity.sessionState.activationState === 'activated') {
           void WatchConnectivity.updateApplicationContext(JSON.parse(context)).catch(() => {});
