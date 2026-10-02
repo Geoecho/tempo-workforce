@@ -1,3 +1,4 @@
+import { useWatchDebug } from '../lib/WatchSync';
 
 import { BellRing, Smartphone, Volume2 } from 'lucide-react-native';
 import React, { useState } from 'react';
@@ -20,6 +21,7 @@ function SettingRow({ icon, title, detail, value, onChange, disabled = false }: 
 }
 
 export function FeedbackControls({ worker }: { worker: boolean }) {
+  const watchDebug = useWatchDebug();
   const C = useTheme().colors;
   const { haptics, sounds, reminders, setHaptics, setSounds, setReminders, play } = useFeedback();
   const [message, setMessage] = useState('');
@@ -33,5 +35,6 @@ export function FeedbackControls({ worker }: { worker: boolean }) {
       {worker && <><View style={{ height: 1, backgroundColor: C.line }} /><SettingRow icon={<BellRing size={18} color={C.green} />} title="Shift reminders" detail={Platform.OS === 'web' ? 'Available in the iOS and Android app.' : 'A quiet reminder one hour before each shift.'} value={reminders} disabled={Platform.OS === 'web'} onChange={value => { void setReminders(value).then(ok => { setMessage(ok ? '' : 'Notifications are off for Tempo in your phone settings.'); }); }} /></>}
       {!!message && <Pressable accessibilityRole="button" onPress={() => void Linking.openSettings()} style={{ paddingBottom: 12 }}><Text style={{ color: C.red, fontSize: 12, lineHeight: 18 }}>{message} Open settings</Text></Pressable>}
     </Card>
+    <Text style={{ color: C.muted, fontSize: 11, lineHeight: 16, marginTop: 10 }}>{watchDebug}</Text>
   </>;
 }
