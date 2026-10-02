@@ -1,8 +1,10 @@
 import SwiftUI
 import WatchConnectivity
 import WatchKit
+import UserNotifications
 
-final class TempoWatchModel: NSObject, ObservableObject, WCSessionDelegate {
+final class TempoWatchModel: NSObject, ObservableObject, WCSessionDelegate, UNUserNotificationCenterDelegate {
+    static let shared = TempoWatchModel()
     @Published var status = "waiting"
     @Published var title = "Open Tempo on iPhone"
     @Published var site = "Your next shift will appear here"
@@ -15,10 +17,15 @@ final class TempoWatchModel: NSObject, ObservableObject, WCSessionDelegate {
     @Published var earnedCents: Double = 0
     @Published var rate: Double = 0
     @Published var currency = "USD"
+    @Published var unit = "hour"
+    @Published var qrSize = 0
+    @Published var qrBits = ""
     @Published var sentAt = Date()
 
     override init() {
         super.init()
+        UNUserNotificationCenter.current().delegate = self
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
         session.delegate = self
@@ -68,7 +75,41 @@ final class TempoWatchModel: NSObject, ObservableObject, WCSessionDelegate {
         earnedCents = (context["earned"] as? NSNumber)?.doubleValue ?? 0
         rate = (context["rate"] as? NSNumber)?.doubleValue ?? 0
         currency = context["currency"] as? String ?? "USD"
+        unit = context["unit"] as? String ?? "hour"
+        qrSize = (context["qrSize"] as? NSNumber)?.intValue ?? 0
+        qrBits = context["qrBits"] as? String ?? ""
+        handleEvent(context)
         if let ms = (context["at"] as? NSNumber)?.doubleValue { sentAt = Date(timeIntervalSince1970: ms / 1000) }
+    }
+
+    private var seenEvent: String {
+        get { UserDefaults.standard.string(forKey: "tempo.lastEvent") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "tempo.lastEvent") }
+    }
+
+    // Check-in / check-out from the iPhone: haptic now, plus a notification so it is felt when the app is not open.
+    private func handleEvent(_ context: [String: Any]) {
+        guard let event = context["event"] as? String, let id = context["eventId"] as? String, id != seenEvent else { return }
+        seenEvent = id
+        WKInterfaceDevice.current().play(event == "in" ? .start : .stop)
+        let content = UNMutableNotificationContent()
+        content.title = context["eventTitle"] as? String ?? (event == "in" ? "Checked in" : "Checked out")
+        var body = context["eventBody"] as? String ?? ""
+        if event == "out", (context["has"] as? Bool ?? false), let cents = (context["earned"] as? NSNumber)?.doubleValue {
+            let f = NumberFormatter()
+            f.numberStyle = .currency
+            f.currencyCode = context["currency"] as? String ?? "USD"
+            let money = f.string(from: NSNumber(value: cents / 100)) ?? ""
+            body += body.isEmpty ? "Earned \(money)" : " · Earned \(money)"
+        }
+        content.body = body
+        content.sound = .default
+        let request = UNNotificationRequest(identifier: "tempo-\(id)", content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false))
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound])
     }
 
     func requestScanner() {
@@ -88,7 +129,7 @@ final class TempoWatchModel: NSObject, ObservableObject, WCSessionDelegate {
 }
 
 struct ContentView: View {
-    @StateObject private var model = TempoWatchModel()
+    @ObservedObject private var model = TempoWatchModel.shared
     private let mint = Color(red: 0.84, green: 0.89, blue: 0.80)
     private let darkGreen = Color(red: 0.09, green: 0.42, blue: 0.29)
     private let moneyGreen = Color(red: 0.42, green: 0.88, blue: 0.58)
@@ -142,10 +183,11 @@ struct ContentView: View {
         case "onShift", "onBreak":
             TimelineView(.periodic(from: .now, by: 1)) { ctx in
                 let delta = model.running ? max(0, ctx.date.timeIntervalSince(model.sentAt)) : 0
+                let payDelta = model.unit == "hour" ? delta : 0
                 VStack(alignment: .leading, spacing: 2 * k) {
                     caption(model.status == "onBreak" ? "PAID BREAK" : "ON SHIFT")
                     big(clock(model.worked + delta), 44)
-                    if model.hasPay { big(money(model.earnedCents + delta * model.rate / 36), 32, moneyGreen) }
+                    if model.hasPay { big(money(model.earnedCents + payDelta * model.rate / 36), 32, moneyGreen) }
                 }
             }
         case "complete":
@@ -209,10 +251,40 @@ struct ContentView: View {
                 big("—", 36, moneyGreen)
                 dim("Starts when you check in")
             }
-            if model.rate > 0 { small(money(model.rate * 100) + " / hour", 14) }
+            if model.rate > 0 { small(money(model.rate * 100) + " / " + model.unit, 14) }
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // Page 4: personal ID code, scanned by a manager
+    private var pageCode: some View {
+        VStack(spacing: 4 * k) {
+            Spacer(minLength: 0)
+            if model.qrSize > 0 && model.qrBits.count == model.qrSize * model.qrSize {
+                let n = model.qrSize
+                let bits = Array(model.qrBits)
+                Canvas { ctx, size in
+                    let cell = min(size.width, size.height) / CGFloat(n)
+                    for row in 0..<n {
+                        for col in 0..<n where bits[row * n + col] == "1" {
+                            ctx.fill(Path(CGRect(x: CGFloat(col) * cell, y: CGFloat(row) * cell, width: cell + 0.5, height: cell + 0.5)), with: .color(.black))
+                        }
+                    }
+                }
+                .aspectRatio(1, contentMode: .fit)
+                .padding(7)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .frame(maxWidth: 128 * k, maxHeight: 128 * k)
+                caption("MY ID CODE")
+            } else {
+                caption("MY ID CODE")
+                dim("Sign in as a worker on the iPhone")
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     var body: some View {
@@ -231,6 +303,7 @@ struct ContentView: View {
                 pageGlance.padding(.horizontal, 10)
                 pageShift.padding(.horizontal, 10)
                 pagePay.padding(.horizontal, 10)
+                pageCode.padding(.horizontal, 10)
             }
             .tabViewStyle(.page)
         }

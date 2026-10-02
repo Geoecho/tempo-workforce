@@ -6,7 +6,7 @@ import { AuthScreen } from '../ui/AuthScreen';
 import { PasswordRecovery } from '../ui/PasswordRecovery';
 import { WorkspaceSetup } from '../ui/WorkspaceSetup';
 import { useTheme } from '../ui/theme';
-import { BreakEvent, Currency, initialState, Message, newWorkspaceState, paySummary, Punch, Shift, ShiftNotification, State, TimeApproval, teamNames, today, uid, Worker } from './data';
+import { lateMinutes, lateNote, shiftHasEnded, BreakEvent, Currency, initialState, Message, newWorkspaceState, paySummary, Punch, Shift, ShiftNotification, State, TimeApproval, teamNames, today, uid, Worker } from './data';
 import { Context, Result } from './store-context';
 import { recoveryRedirect, supabase } from './supabase';
 
@@ -193,12 +193,28 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   const restoreShift = (id: string) => commit(s => ({ ...s, shifts: s.shifts.map(shift => shift.id === id ? { ...shift, archived: false } : shift) }));
 
   const scan = async (payload: string, source: Punch['source'] = 'qr'): Promise<Result> => {
+    // Check-in closes when the shift's end time passes (the database enforces this too once migrated).
+    const cur = stateRef.current;
+    const latest = new Map<string, Punch['type']>();
+    for (const p of cur.punches.filter(x => x.workerId === cur.selectedWorkerId).sort((a, b) => a.at.localeCompare(b.at))) latest.set(p.shiftId, p.type);
+    const checkedIn = [...latest.values()].includes('in');
+    if (!checkedIn) {
+      const todays = cur.shifts.filter(x => !x.archived && x.date === today() && x.workerIds.includes(cur.selectedWorkerId));
+      if (todays.length && todays.every(x => shiftHasEnded(x))) return { ok: false, message: 'This shift has ended, so check-in is closed. Ask a manager if you worked it.' };
+    }
     const { data, error } = await client.rpc('tempo_record_punch', { p_payload: payload, p_source: source });
     if (error) return { ok: false, message: error.message };
     try {
       const fresh = await loadSnapshot();
       const worker = fresh?.workers.find(w => w.id === fresh.selectedWorkerId);
-      return { ...(data as Result), ...(worker && (data as Result).type === 'out' ? { pay: paySummary(fresh!.punches, worker, today()) } : {}) };
+      const result = data as Result;
+      let message = result.message;
+      if (worker && result.type === 'in') {
+        const last = fresh!.punches.filter(p => p.workerId === worker.id && p.type === 'in').sort((a, b) => a.at.localeCompare(b.at)).at(-1);
+        const shift = last ? fresh!.shifts.find(x => x.id === last.shiftId) : undefined;
+        if (shift) message = message.replace(/\.?$/, '.') + lateNote(lateMinutes(shift, fresh!.punches, worker.id));
+      }
+      return { ...result, message, ...(worker && result.type === 'out' ? { pay: paySummary(fresh!.punches, worker, today()) } : {}) };
     } catch {
       return data as Result;
     }

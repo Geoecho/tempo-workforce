@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { View } from 'react-native';
 import { Pressable } from '../../ui/LocalizedPressable';
 import { Text } from '../../ui/LocalizedText';
-import { activeBreak, durationMinutes, formatDay, formatMoney, formatTime, hoursLabel, localDate, shiftHasEnded, today } from '../../lib/data';
+import { lateMinutes, activeBreak, durationMinutes, formatDay, formatMoney, formatTime, hoursLabel, localDate, shiftHasEnded, today } from '../../lib/data';
 import { confirmRemoval } from '../../lib/confirm';
 import { callWorker } from '../../lib/phone';
 import { useStore } from '../../lib/store';
@@ -12,7 +12,7 @@ import { openSiteMap } from '../../lib/site-location';
 import { CalendarAction } from '../../ui/CalendarAction';
 import { Avatar, Button, Card, Pill, Screen, Section } from '../../ui/components';
 import { useTheme } from '../../ui/theme';
-import { ShiftRoles } from '../../ui/extras-ui';
+import { ShiftPay, ShiftRoles } from '../../ui/extras-ui';
 
 export default function ShiftDetail() {
   const C = useTheme().colors;
@@ -63,7 +63,12 @@ export default function ShiftDetail() {
     <Section title="Assigned team" />
     {role === 'admin' && <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}><Card style={{ flex: 1, padding: 13 }}><Text style={{ color: C.green, fontSize: 23, fontWeight: '600' }}>{canScan ? onSiteCount : openCount}</Text><Text style={{ color: C.muted, fontSize: 11 }}>{canScan ? 'On site' : 'No check-out'}</Text></Card><Card style={{ flex: 1, padding: 13 }}><Text style={{ color: C.ink, fontSize: 23, fontWeight: '600' }}>{teamIds.length - openCount - checkedOutCount}</Text><Text style={{ color: C.muted, fontSize: 11 }}>Not arrived</Text></Card><Card style={{ flex: 1, padding: 13 }}><Text style={{ color: C.ink, fontSize: 23, fontWeight: '600' }}>{checkedOutCount}</Text><Text style={{ color: C.muted, fontSize: 11 }}>Checked out</Text></Card></View>}
     <Card style={{ padding: 0, overflow: 'hidden' }}>{teamIds.map((workerId, i) => { const w = workers.find(x => x.id === workerId); if (!w) return null; const last = lastByWorker.get(workerId); const onBreak = activeBreak(breaks, punches, shift.id, workerId); return <View key={workerId} style={{ flexDirection: 'row', alignItems: 'center', padding: 15, borderTopWidth: i ? 1 : 0, borderTopColor: C.line }}><Avatar worker={w} size={38} /><View style={{ flex: 1, marginLeft: 12 }}><Text style={{ color: C.ink, fontWeight: '500', fontSize: 13 }}>{w.name}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{w.role} · {hoursLabel(durationMinutes(punches, shift.id, workerId))}</Text>{last && <Text style={{ color: last.type === 'in' ? C.green : C.muted, fontSize: 11, marginTop: 3 }}>{onBreak ? 'On paid break' : last.type === 'in' ? 'Checked in' : 'Checked out'} at {formatTime(onBreak?.at ?? last.at)}</Text>}{role === 'admin' && <Text style={{ color: C.green, fontSize: 11, marginTop: 3 }}>{formatMoney(Math.round(w.hourlyRate * 100), currency)}/h</Text>}</View><View style={{ alignItems: 'flex-end', gap: 6 }}><Pill tone={last?.type === 'in' ? 'green' : 'gray'}>{onBreak ? 'ON BREAK' : last?.type === 'in' ? 'ON SITE' : last?.type === 'out' ? 'CHECKED OUT' : 'NOT ARRIVED'}</Pill>{role === 'admin' && w.phone && <Pressable accessibilityLabel={`Call ${w.name}`} onPress={() => callWorker(w.phone)} style={{ width: 31, height: 31, backgroundColor: C.mint, borderRadius: 9, alignItems: 'center', justifyContent: 'center' }}><Phone size={15} color={C.green} /></Pressable>}</View></View>; })}</Card>
+    {(() => {
+      const late = shift.workerIds.map(id => ({ id, minutes: lateMinutes(shift, punches, id) })).filter(x => x.minutes > 0 && (role === 'admin' || x.id === selectedWorkerId));
+      return late.length ? <><Section title="Late arrivals" /><Card style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>{late.map((x, i) => <View key={x.id} style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderTopWidth: i ? 1 : 0, borderTopColor: C.line }}><Text style={{ flex: 1, color: C.ink, fontSize: 13 }}>{workers.find(w => w.id === x.id)?.name ?? 'Team member'}</Text><Text style={{ color: C.red, fontSize: 13, fontWeight: '500' }}>{x.minutes} min late</Text></View>)}</Card></> : null;
+    })()}
     <ShiftRoles shiftId={shift.id} workerIds={shift.workerIds} workers={workers} admin={role === 'admin' && !shift.archived} currency={currency} viewerId={selectedWorkerId} />
+    {role === 'admin' && !shift.archived && <ShiftPay shiftId={shift.id} currency={currency} />}
     {!!breakHistory.length && <><Section title="Paid break history" /><Card style={{ padding: 0, overflow: 'hidden' }}>{breakHistory.map((event, i) => <View key={event.id} style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderTopWidth: i ? 1 : 0, borderTopColor: C.line }}><Text style={{ flex: 1, color: C.ink, fontSize: 12 }}>{workers.find(worker => worker.id === event.workerId)?.name ?? 'Team member'} {event.type === 'start' ? 'started a paid break' : 'ended a paid break'}</Text><Text style={{ color: C.muted, fontSize: 12 }}>{formatTime(event.at)}</Text></View>)}</Card></>}
     {!!clockHistory.length && <><Section title="Clock history" /><Card style={{ padding: 0, overflow: 'hidden' }}>{clockHistory.map((punch, i) => { const worker = workers.find(w => w.id === punch.workerId); return <View key={punch.id} style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderTopWidth: i ? 1 : 0, borderTopColor: C.line }}><View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: punch.type === 'in' ? C.green : C.muted, marginRight: 12 }} /><View style={{ flex: 1 }}><Text style={{ color: C.ink, fontSize: 12, fontWeight: '500' }}>{worker?.name ?? 'Team member'} checked {punch.type}</Text><Text style={{ color: C.muted, fontSize: 11, marginTop: 2 }}>{formatDay(punch.workDate ?? localDate(new Date(punch.at)))}</Text></View><Text style={{ color: C.muted, fontSize: 12 }}>{formatTime(punch.at)}</Text></View>; })}</Card></>}
   </Screen>;

@@ -9,7 +9,7 @@ import { confirmRemoval } from '../../lib/confirm';
 import { callWorker, messageWorker } from '../../lib/phone';
 import { useExtras } from '../../lib/extras';
 import { useStore } from '../../lib/store';
-import { RolePicker, TaskList } from '../../ui/extras-ui';
+import { PayEditor, RolePicker, TaskList } from '../../ui/extras-ui';
 import { chooseProfilePhoto } from '../../lib/profile-photo';
 import { Avatar, Button, Card, Screen, Section } from '../../ui/components';
 import { Field } from '../../ui/Field';
@@ -95,6 +95,7 @@ function WorkerEditor({ worker }: { worker: Worker }) {
     <Field label="Phone" value={phone} onChangeText={setPhone} placeholder="Include country code" keyboardType="phone-pad" />
     <Field label={`Hourly rate (${currency})`} value={rate} onChangeText={setRate} placeholder="e.g. 40.00" keyboardType="decimal-pad" />
     <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, marginBottom: 17 }}>Current rate: {formatMoney(Math.round(worker.hourlyRate * 100), currency)}/hour. A rate change applies to future check-ins; recorded sessions retain their original rate.</Text>
+    <PayEditor workerId={worker.id} currency={currency} hourlyRate={worker.hourlyRate} />
     {!!message && <Text style={{ color: C.red, marginBottom: 12 }}>{message}</Text>}
     <Button label="Save worker" onPress={save} />
     <View style={{ marginTop: 13 }}><Button label="Remove worker" variant="danger" icon={<Trash2 size={17} color={C.red} />} onPress={remove} /></View>

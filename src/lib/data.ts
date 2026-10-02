@@ -45,6 +45,15 @@ export const shiftHasEnded = (shift: Shift, now = Date.now()) => {
   if (shift.end <= shift.start) end.setDate(end.getDate() + 1);
   return end.getTime() < now;
 };
+// Arriving more than the grace period after the shift start counts as late. Derived from the first check-in, so it is always on record.
+export const LATE_GRACE_MINUTES = 5;
+export const lateMinutes = (shift: Shift, punches: Punch[], workerId: string) => {
+  const first = punches.filter(p => p.shiftId === shift.id && p.workerId === workerId && p.type === 'in').sort((a, b) => a.at.localeCompare(b.at))[0];
+  if (!first) return 0;
+  const minutes = Math.floor((new Date(first.at).getTime() - new Date(`${shift.date}T${shift.start}:00`).getTime()) / 60000);
+  return minutes > LATE_GRACE_MINUTES ? minutes : 0;
+};
+export const lateNote = (minutes: number) => minutes ? ` You arrived ${minutes} min late. This has been logged.` : '';
 export const shiftHasOpenPunch = (shiftId: string, punches: Punch[]) => {
   const latest = new Map<string, Punch>();
   for (const punch of punches.filter(item => item.shiftId === shiftId).sort((a, b) => a.at.localeCompare(b.at))) latest.set(punch.workerId, punch);
@@ -89,22 +98,33 @@ export const punchCooldownSeconds = (punches: Punch[], workerId: string, now = D
 };
 export const formatMoney = (cents: number, currency: Currency) => new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(cents / 100);
 
+
+// Pay models. Hourly is the default; "event" pays a flat amount per shift attended; "fixed" is a monthly salary (accrues as a daily share on days worked).
+export type PayType = 'hourly' | 'event' | 'fixed';
+export type PayConfig = { type: PayType; amount: number };
+let payWorkers: Record<string, PayConfig> = {};
+let payShifts: Record<string, number> = {};
+export const setPayRegistry = (workersCfg: Record<string, PayConfig>, shiftCfg: Record<string, number>) => { payWorkers = workersCfg; payShifts = shiftCfg; };
+export const payConfigOf = (workerId: string): PayConfig => payWorkers[workerId] ?? { type: 'hourly', amount: 0 };
+export const shiftPayOf = (shiftId: string): number | undefined => payShifts[shiftId];
+export const payUnitLabel = (type: PayType) => type === 'event' ? 'event' : type === 'fixed' ? 'month' : 'hour';
+
 export type PaySummary = { actualMinutes: number; payableMinutes: number; excessMinutes: number; actualSeconds: number; payableSeconds: number; earningsCents: number };
 export function paySummary(punches: Punch[], worker: Worker, date: string, now = Date.now()): PaySummary {
   const events = punches.filter(p => p.workerId === worker.id && (p.workDate ?? localDate(new Date(p.at))) === date).sort((a, b) => a.at.localeCompare(b.at));
   const open = new Map<string, Punch>();
-  const sessions: { started: number; duration: number; rate: number }[] = [];
+  const sessions: { started: number; duration: number; rate: number; shiftId: string }[] = [];
   for (const event of events) {
     if (event.type === 'in' && !open.has(event.shiftId)) open.set(event.shiftId, event);
     if (event.type === 'out') {
       const start = open.get(event.shiftId);
       if (start) {
-        sessions.push({ started: new Date(start.at).getTime(), duration: Math.max(0, new Date(event.at).getTime() - new Date(start.at).getTime()), rate: start.rateAtCheckIn ?? worker.hourlyRate });
+        sessions.push({ started: new Date(start.at).getTime(), duration: Math.max(0, new Date(event.at).getTime() - new Date(start.at).getTime()), rate: start.rateAtCheckIn ?? worker.hourlyRate, shiftId: event.shiftId });
         open.delete(event.shiftId);
       }
     }
   }
-  if (date === localDate(new Date(now))) for (const start of open.values()) sessions.push({ started: new Date(start.at).getTime(), duration: Math.max(0, now - new Date(start.at).getTime()), rate: start.rateAtCheckIn ?? worker.hourlyRate });
+  if (date === localDate(new Date(now))) for (const start of open.values()) sessions.push({ started: new Date(start.at).getTime(), duration: Math.max(0, now - new Date(start.at).getTime()), rate: start.rateAtCheckIn ?? worker.hourlyRate, shiftId: start.shiftId });
   sessions.sort((a, b) => a.started - b.started);
   const capMs = MAX_PAID_MINUTES_PER_DAY * 60_000;
   let actualMs = 0;
@@ -116,6 +136,15 @@ export function paySummary(punches: Punch[], worker: Worker, date: string, now =
     actualMs += session.duration;
     paidMs += payable;
     earningsCents += Math.round(payable / 3_600_000 * session.rate * 100);
+  }
+  const cfg = payConfigOf(worker.id);
+  if (cfg.type === 'event') {
+    const shiftIds = [...new Set(sessions.map(x => x.shiftId))];
+    earningsCents = shiftIds.reduce((sum, id) => sum + Math.round((shiftPayOf(id) ?? cfg.amount) * 100), 0);
+  } else if (cfg.type === 'fixed') {
+    const d = new Date(`${date}T12:00:00`);
+    const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    earningsCents = sessions.length ? Math.round(cfg.amount * 100 / daysInMonth) : 0;
   }
   return { actualMinutes: Math.floor(actualMs / 60_000), payableMinutes: Math.floor(paidMs / 60_000), excessMinutes: Math.floor(Math.max(0, actualMs - paidMs) / 60_000), actualSeconds: Math.floor(actualMs / 1000), payableSeconds: Math.floor(paidMs / 1000), earningsCents };
 }

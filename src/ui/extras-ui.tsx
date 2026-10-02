@@ -3,10 +3,10 @@ import React, { useState } from 'react';
 import { Image, View } from 'react-native';
 import { Pressable } from './LocalizedPressable';
 import { Text, TextInput } from './LocalizedText';
-import { formatDay, formatMoney, Currency } from '../lib/data';
+import { formatDay, formatMoney, Currency, PayType } from '../lib/data';
 import { RoleTag, Task, useExtras } from '../lib/extras';
 import { takeProofPhoto } from '../lib/proof-photo';
-import { Card, Section } from './components';
+import { Button, Card, Section } from './components';
 import { useTheme } from './theme';
 
 export function RoleChip({ role, currency }: { role: RoleTag; currency?: Currency }) {
@@ -111,4 +111,72 @@ export function ShiftRoles({ shiftId, workerIds, workers, admin, currency, viewe
       {r.a.overridden && <Pressable accessibilityRole="button" onPress={() => { setOverride(shiftId, r.id, null); }}><Text style={{ color: C.muted, fontSize: 12 }}>Reset to {(workerRoles[r.id] ?? []).length} default tag(s)</Text></Pressable>}
     </View>}
   </View>)}</Card></>;
+}
+
+const PAY_TYPES: { id: PayType; label: string; unit: string }[] = [
+  { id: 'hourly', label: 'Hourly', unit: 'per hour' },
+  { id: 'event', label: 'Per event', unit: 'per event' },
+  { id: 'fixed', label: 'Monthly', unit: 'per month' },
+];
+
+// Admin editor for how one person is paid. Hourly uses the rate on the profile.
+export function PayEditor({ workerId, currency, hourlyRate }: { workerId: string; currency: Currency; hourlyRate: number }) {
+  const C = useTheme().colors;
+  const { pay, setWorkerPay } = useExtras();
+  const current = pay[workerId] ?? { type: 'hourly' as PayType, amount: 0 };
+  const [type, setType] = useState<PayType>(current.type);
+  const [amount, setAmount] = useState(current.amount ? String(current.amount) : '');
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+  const save = () => {
+    if (type === 'hourly') { setWorkerPay(workerId, { type, amount: 0 }); setSaved(true); setError(''); return; }
+    const value = Number(amount.replace(',', '.'));
+    if (!Number.isFinite(value) || value <= 0 || value > 1_000_000) return setError('Enter an amount above zero.');
+    setWorkerPay(workerId, { type, amount: Math.round(value * 100) / 100 });
+    setSaved(true); setError('');
+  };
+  const unit = PAY_TYPES.find(p => p.id === type)!.unit;
+  return <>
+    <Section title="How they are paid" />
+    <Card style={{ marginBottom: 16 }}>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {PAY_TYPES.map(p => <Pressable key={p.id} accessibilityRole="button" onPress={() => { setType(p.id); setSaved(false); }} style={{ flex: 1, minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: type === p.id ? C.green : C.surface, borderWidth: 1, borderColor: type === p.id ? C.green : C.line }}>
+          <Text style={{ color: type === p.id ? C.onGreen : C.ink, fontSize: 13, fontWeight: '500' }}>{p.label}</Text>
+        </Pressable>)}
+      </View>
+      {type === 'hourly'
+        ? <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, marginTop: 12 }}>Paid by the hour at {formatMoney(Math.round(hourlyRate * 100), currency)}/hour (the rate above). Pay builds second by second while checked in.</Text>
+        : <>
+          <TextInput accessibilityLabel="Pay amount" value={amount} onChangeText={t => { setAmount(t); setSaved(false); }} placeholder={`Amount ${unit} (${currency})`} placeholderTextColor={C.placeholder} keyboardType="decimal-pad" style={{ marginTop: 12, borderWidth: 1, borderColor: C.line, borderRadius: 11, padding: 12, color: C.ink, backgroundColor: C.surface }} />
+          <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, marginTop: 10 }}>{type === 'event' ? 'A flat amount for every shift they check in to, whatever the hours. A shift can override it on its own page.' : 'A monthly salary. Each day they check in earns an equal share of the month.'}</Text>
+        </>}
+      {!!error && <Text style={{ color: C.red, fontSize: 12, marginTop: 8 }}>{error}</Text>}
+      <View style={{ marginTop: 12 }}><Button label={saved ? 'Saved' : 'Save pay'} onPress={save} /></View>
+    </Card>
+  </>;
+}
+
+// Admin override: the flat pay for one event, for people paid per event.
+export function ShiftPay({ shiftId, currency }: { shiftId: string; currency: Currency }) {
+  const C = useTheme().colors;
+  const { shiftPay, setShiftPay } = useExtras();
+  const current = shiftPay[shiftId];
+  const [value, setValue] = useState(current !== undefined ? String(current) : '');
+  const [message, setMessage] = useState('');
+  const save = () => {
+    if (!value.trim()) { setShiftPay(shiftId, null); return setMessage('Using each person’s own per-event amount.'); }
+    const n = Number(value.replace(',', '.'));
+    if (!Number.isFinite(n) || n <= 0 || n > 1_000_000) return setMessage('Enter an amount above zero.');
+    setShiftPay(shiftId, Math.round(n * 100) / 100);
+    setMessage('Saved.');
+  };
+  return <>
+    <Section title="Pay for this event" />
+    <Card style={{ marginBottom: 16 }}>
+      <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, marginBottom: 10 }}>For people paid per event. Leave empty to use their own amount. Hourly and monthly pay are not changed.</Text>
+      <TextInput accessibilityLabel="Event pay" value={value} onChangeText={t => { setValue(t); setMessage(''); }} placeholder={`Amount (${currency})`} placeholderTextColor={C.placeholder} keyboardType="decimal-pad" style={{ borderWidth: 1, borderColor: C.line, borderRadius: 11, padding: 12, color: C.ink, backgroundColor: C.surface }} />
+      {!!message && <Text style={{ color: C.muted, fontSize: 12, marginTop: 8 }}>{message}</Text>}
+      <View style={{ marginTop: 12 }}><Button label="Save event pay" variant="light" onPress={save} /></View>
+    </Card>
+  </>;
 }

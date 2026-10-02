@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useContext, useEffect, useState } from 'react';
-import { activeBreak, BreakEvent, Currency, initialState, Message, parseQr, paySummary, punchCooldownSeconds, Punch, qrPayload, Shift, State, TimeApproval, teamNames, today, uid, Worker, MAX_PAID_MINUTES_PER_DAY } from './data';
+import { lateMinutes, lateNote, shiftHasEnded, payConfigOf, activeBreak, BreakEvent, Currency, initialState, Message, parseQr, paySummary, punchCooldownSeconds, Punch, qrPayload, Shift, State, TimeApproval, teamNames, today, uid, Worker, MAX_PAID_MINUTES_PER_DAY } from './data';
 import { Context, Result } from './store-context';
 import { supabase } from './supabase';
 import { OnlineStoreProvider } from './online-store';
@@ -79,7 +79,8 @@ function LocalStoreProvider({ children }: { children: React.ReactNode }) {
     const last = [...state.punches].reverse().find(p => p.shiftId === shiftId && p.workerId === state.selectedWorkerId);
     const type = last?.type === 'in' ? 'out' : 'in';
     if (type === 'in') {
-      if (worker.hourlyRate <= 0) return { ok: false, message: 'Ask an admin to set your hourly rate before check-in.' };
+      if (shiftHasEnded(shift)) return { ok: false, message: 'This shift has ended, so check-in is closed. Ask a manager if you worked it.' };
+      if (worker.hourlyRate <= 0 && payConfigOf(worker.id).type === 'hourly') return { ok: false, message: 'Ask an admin to set your hourly rate before check-in.' };
       if (paySummary(state.punches, worker, today()).payableMinutes >= MAX_PAID_MINUTES_PER_DAY) return { ok: false, message: 'The 10-hour daily payable limit has been reached. Ask a manager to review.' };
       const open = new Set<string>();
       for (const p of state.punches.filter(p => p.workerId === state.selectedWorkerId)) { if (p.type === 'in') open.add(p.shiftId); else open.delete(p.shiftId); }
@@ -89,7 +90,7 @@ function LocalStoreProvider({ children }: { children: React.ReactNode }) {
     const pay = type === 'out' ? paySummary([...state.punches, punch], worker, today()) : undefined;
     setState(s => ({ ...s, punches: [...s.punches, punch] }));
     setApprovals(current => current.filter(a => !(a.workerId === punch.workerId && a.date === punch.workDate)));
-    return { ok: true, message: type === 'in' ? `Checked in to ${shift.site}` : `Checked out of ${shift.site}`, type, pay };
+    return { ok: true, message: (type === 'in' ? `Checked in to ${shift.site}.` : `Checked out of ${shift.site}`) + (type === 'in' ? lateNote(lateMinutes(shift, [punch], worker.id)) : ''), type, pay };
   };
   const toggleBreak = async (shiftId: string): Promise<Result> => {
     const shift = state.shifts.find(item => item.id === shiftId && !item.archived && item.date === today() && item.workerIds.includes(state.selectedWorkerId));

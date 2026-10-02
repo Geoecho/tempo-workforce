@@ -6,6 +6,7 @@ import { Pressable } from '../ui/LocalizedPressable';
 import { Text } from '../ui/LocalizedText';
 import { activeBreak, formatDay, formatMoney, formatTime, initialState, paySummary, payTimeLabel, today } from '../lib/data';
 import { useStore } from '../lib/store';
+import { useExtras } from '../lib/extras';
 import { TaskList } from '../ui/extras-ui';
 import { useLanguage } from '../lib/i18n';
 import { Button, Card, Empty, Pill, Screen, Section } from '../ui/components';
@@ -38,6 +39,7 @@ export default function Home() {
     setBreakMessage(result.message);
     setBreakBusy(false);
   };
+  useExtras();
   const myPay = paySummary(punches, worker, day);
   const teamPay = workers.reduce((sum, w) => sum + paySummary(punches, w, day).earningsCents, 0);
   const quickActions = <Card style={{ minHeight: desktop ? 220 : undefined, padding: 0, overflow: 'hidden' }}><View style={{ paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: C.line }}><Text style={{ color: C.ink, fontSize: 16, fontWeight: '500' }}>{t('Quick actions')}</Text></View><Pressable onPress={() => router.push('/team')} style={{ paddingHorizontal: 20, paddingVertical: 17, flexDirection: 'row', alignItems: 'center', gap: 13, borderBottomWidth: 1, borderBottomColor: C.line }}><UsersRound size={19} color={C.green} /><Text style={{ color: C.ink, fontSize: 14, flex: 1 }}>Contact team</Text><Text style={{ color: C.muted }}>→</Text></Pressable><Pressable onPress={() => router.push('/time')} style={{ paddingHorizontal: 20, paddingVertical: 17, flexDirection: 'row', alignItems: 'center', gap: 13 }}><TrendingUp size={19} color={C.green} /><Text style={{ color: C.ink, fontSize: 14, flex: 1 }}>Review pay</Text><Text style={{ color: C.muted }}>→</Text></Pressable></Card>;
