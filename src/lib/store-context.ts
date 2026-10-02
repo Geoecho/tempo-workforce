@@ -30,6 +30,7 @@ export type Store = State & {
   scan: (payload: string, source?: Punch['source']) => Result | Promise<Result>;
   toggleBreak: (shiftId: string) => Promise<Result>;
   issueQr: (shiftId: string) => Promise<string>;
+  dismissNotification: (id: string) => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
   reviewTime: (workerId: string, date: string, approve: boolean) => Promise<Result>;
   reset: () => void;

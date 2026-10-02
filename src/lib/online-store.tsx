@@ -10,6 +10,8 @@ import { BreakEvent, Currency, initialState, Message, newWorkspaceState, paySumm
 import { Context, Result } from './store-context';
 import { recoveryRedirect, supabase } from './supabase';
 
+import { clockInNotifications, useNotificationInbox } from './notification-inbox';
+
 type Snapshot = { workspaceId: string; version: number; state: State; notifications?: ShiftNotification[]; approvals?: TimeApproval[] };
 const client = supabase!;
 
@@ -37,6 +39,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
 
   const userId = session?.user.id;
   const accountIntent = session?.user.user_metadata.tempo_intent;
+  const inbox = useNotificationInbox(`${userId ?? 'signed-out'}:${workspaceId}:${state.role}`, state.role === 'admin' ? clockInNotifications(state) : notifications);
 
   useEffect(() => {
     client.auth.getSession().then(({ data }) => setSession(data.session)).finally(() => setAuthReady(true));
@@ -213,6 +216,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
     return String(data);
   }, []);
   const markNotificationRead = async (id: string): Promise<void> => {
+    if (state.role === 'admin') return inbox.markLocalNotificationRead(id);
     const { error } = await client.rpc('tempo_mark_notification_read', { p_id: id });
     if (error) throw error;
     setNotifications(current => current.map(item => item.id === id ? { ...item, readAt: new Date().toISOString() } : item));
@@ -249,7 +253,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   </View>;
 
   return <Context.Provider value={{
-    ...state, ready, online: true, syncError, accountEmail: session.user.email ?? null, notifications, approvals, breaks, messages,
+    ...state, ready, online: true, syncError, accountEmail: session.user.email ?? null, notifications: inbox.notifications, dismissNotification: inbox.dismissNotification, approvals, breaks, messages,
     setRole: () => {}, setSelectedWorker: () => {}, addTeam,
     addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, setWorkspaceName,
     addShift, addShifts, updateShift, removeShift, restoreShift, scan, toggleBreak, issueQr, markNotificationRead, reviewTime,

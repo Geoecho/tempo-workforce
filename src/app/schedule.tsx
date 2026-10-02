@@ -11,6 +11,7 @@ import { useStore } from '../lib/store';
 import { useLanguage } from '../lib/i18n';
 import { Button, Card, Empty, Screen } from '../ui/components';
 import { ShiftCard } from '../ui/ShiftCard';
+import { ContentGrid } from '../ui/ContentGrid';
 import { useTheme } from '../ui/theme';
 
 export default function Schedule() {
@@ -48,7 +49,8 @@ export default function Schedule() {
     title={role === 'admin' ? 'Shifts' : 'My shifts'}
     subtitle={role === 'admin' ? 'Plan work and review completed shifts.' : 'Your next shifts and recorded history.'}
   >
-    <View style={{ flexDirection: 'row', gap: 9, marginBottom: 23 }}>
+    <View style={{ flexDirection: desktop ? 'row' : 'column', alignItems: desktop ? 'center' : 'stretch', justifyContent: 'space-between', gap: desktop ? 16 : 0, marginBottom: desktop ? 20 : 0 }}>
+    <View style={{ flexDirection: 'row', gap: 9, marginBottom: desktop ? 0 : 23 }}>
       {(['upcoming', 'history'] as const).map(item => <Pressable
         key={item}
         onPress={() => setFilter(item)}
@@ -57,12 +59,13 @@ export default function Schedule() {
         style={{ backgroundColor: filter === item ? C.green : C.surface, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: filter === item ? C.green : C.line }}
       ><Text style={{ color: filter === item ? C.onGreen : C.muted, fontWeight: '500', fontSize: 13 }}>{t(item === 'upcoming' ? 'Upcoming' : 'History')}</Text></Pressable>)}
     </View>
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 13 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: desktop ? 0 : 13 }}>
       <Text style={{ color: C.ink, fontSize: 16, fontWeight: '500' }}>{filter === 'upcoming' && groups.length < filtered.length ? `${groups.length} entries · ` : ''}{filtered.length} {t('Shifts').toLowerCase()}</Text>
       {filter === 'history' ? !!filtered.length && <Button label="Export CSV" small variant="outline" icon={<Download size={16} color={C.green} />} onPress={() => void exportHistory()} /> : role === 'admin' && <Button label="New shift" small icon={<Plus size={16} color={C.onGreen} />} onPress={() => router.push('/new-shift')} />}
     </View>
-    {filtered.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-      {groups.map(group => <View key={group.key} style={{ width: desktop ? '49%' : '100%' }}>
+    </View>
+    {filtered.length ? <ContentGrid>
+      {groups.map(group => <View key={group.key}>
         {group.shifts.length < 3 ? group.shifts.map(shift => <ShiftCard key={shift.id} shift={shift} history={filter === 'history'} />) : <>
           <Pressable accessibilityRole="button" accessibilityState={{ expanded: expanded.includes(group.key) }} onPress={() => setExpanded(current => current.includes(group.key) ? current.filter(key => key !== group.key) : [...current, group.key])}>
             <Card style={{ marginBottom: 10, padding: 18 }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}><View style={{ flex: 1 }}>
@@ -77,6 +80,6 @@ export default function Schedule() {
           </>}
         </>}
       </View>)}
-    </View> : <Empty title={filter === 'history' ? 'No shift history yet' : 'Nothing on the calendar'} detail={filter === 'history' ? 'Finished shifts and their clock records will appear here.' : "New assignments will appear here when they're scheduled."} />}
+    </ContentGrid> : <Empty title={filter === 'history' ? 'No shift history yet' : 'Nothing on the calendar'} detail={filter === 'history' ? 'Finished shifts and their clock records will appear here.' : "New assignments will appear here when they're scheduled."} />}
   </Screen>;
 }

@@ -1,6 +1,6 @@
 import { MonitorSmartphone, Moon, RotateCcw, ShieldCheck, Sun, UserRound } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Alert, Platform, Share, View } from 'react-native';
+import { Alert, Platform, Share, useWindowDimensions, View } from 'react-native';
 import { Pressable } from '../ui/LocalizedPressable';
 import { Text, TextInput } from '../ui/LocalizedText';
 import { CURRENCIES, initialState } from '../lib/data';
@@ -14,6 +14,8 @@ export default function Settings() {
   const { colors: C, preference, setPreference } = useTheme();
   const { language, setLanguage, t } = useLanguage();
   const { role, setRole, selectedWorkerId, setSelectedWorker, workers, shifts, currency, setCurrency, setWorkspaceName, workspaceName, punches, restoreWorker, restoreShift, reset, online, syncError, accountEmail, inviteWorker, signOut } = useStore();
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 1200;
   const [showAllCurrencies, setShowAllCurrencies] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteWorkerId, setInviteWorkerId] = useState('');
@@ -25,7 +27,9 @@ export default function Settings() {
     if (Platform.OS === 'web') { if (window.confirm(t('Reset all local demo data on this device?'))) reset(); return; }
     Alert.alert(t('Reset demo?'), t('This clears all workers, shifts, and clock events created on this device.'), [{ text: t('Cancel') }, { text: t('Reset'), style: 'destructive', onPress: reset }]);
   };
-  return <Screen title="Workspace" subtitle={online ? 'Shared across your team.' : 'Settings for this prototype.'}>
+  return <Screen title="Settings" subtitle="Manage your preferences, account, and team.">
+    <View style={{ flexDirection: desktop ? 'row' : 'column', alignItems: 'flex-start', gap: desktop ? 24 : 0 }}>
+    <View style={{ flex: desktop ? 1 : undefined, width: desktop ? undefined : '100%', minWidth: 0 }}>
     <Card style={{ flexDirection: 'row', alignItems: 'center' }}><Avatar worker={current} size={50} /><View style={{ marginLeft: 14 }}><Text style={{ fontSize: 17, fontWeight: '500', color: C.ink }}>{role === 'admin' ? (workspaceName || 'Tempo workspace') : current.name}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 3 }}>{role === 'admin' ? t('Organization admin') : current.role}</Text></View></Card>
     <Section title="Appearance" />
     <Text style={{ color: C.muted, fontSize: 12, marginBottom: 11 }}>Choose how Tempo looks on this device.</Text>
@@ -39,6 +43,9 @@ export default function Settings() {
     <Section title="Language" />
     <Text style={{ color: C.muted, fontSize: 12, marginBottom: 11 }}>{t('Choose your app language.')}</Text>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{LANGUAGES.map(item => <Pressable key={item.code} accessibilityRole="radio" accessibilityState={{ checked: language === item.code }} onPress={() => setLanguage(item.code)} style={{ backgroundColor: language === item.code ? C.green : C.surface, borderColor: language === item.code ? C.green : C.line, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11 }}><Text style={{ color: language === item.code ? C.onGreen : C.ink, fontWeight: '500' }}>{item.label}</Text></Pressable>)}</View>
+    <FeedbackControls worker={role === 'worker'} />
+    </View>
+    <View style={{ flex: desktop ? 1 : undefined, width: desktop ? undefined : '100%', minWidth: 0 }}>
     {online && role === 'admin' && <><Section title="Workspace name" /><Card><TextInput accessibilityLabel={t('Workspace name')} value={name} onChangeText={setName} placeholder={t('Your organization')} placeholderTextColor={C.placeholder} style={{ borderWidth: 1, borderColor: C.line, borderRadius: 11, padding: 12, color: C.ink, backgroundColor: C.surface }} /><Pressable accessibilityRole="button" onPress={() => setWorkspaceName(name)} style={{ alignSelf: 'flex-start', marginTop: 12, paddingVertical: 5 }}><Text style={{ color: C.green, fontWeight: '500' }}>{t('Save name')}</Text></Pressable></Card></>}
     {online && <><Section title="Online account" /><Card>
       <Text style={{ color: C.ink, fontWeight: '500' }}>{accountEmail}</Text>
@@ -64,7 +71,8 @@ export default function Settings() {
     {role === 'worker' && <><Section title="Demo worker" /><Card style={{ padding: 0, overflow: 'hidden' }}>{workers.filter(w => !w.archived).map((w, i) => <Pressable key={w.id} onPress={() => setSelectedWorker(w.id)} style={{ flexDirection: 'row', alignItems: 'center', padding: 13, borderTopWidth: i ? 1 : 0, borderColor: C.line }}><Avatar worker={w} size={35} /><Text style={{ flex: 1, marginLeft: 11, color: C.ink, fontWeight: '600' }}>{w.name}</Text><SelectionMark selected={selectedWorkerId === w.id} round /></Pressable>)}</Card></>}</>}
     {role === 'admin' && <><Section title="Pay currency" /><Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, marginBottom: 11 }}>Set before recording time. The currency locks after the first clock event. Changing it relabels hourly rates; enter the correct rate for each worker afterward.</Text><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{(showAllCurrencies ? CURRENCIES : [...CURRENCIES.slice(0, 4), ...CURRENCIES.filter(item => item === currency && !CURRENCIES.slice(0, 4).includes(item))]).map(item => <Pressable key={item} disabled={!!punches.length} onPress={() => setCurrency(item)} style={{ backgroundColor: currency === item ? C.green : C.surface, borderWidth: 1, borderColor: currency === item ? C.green : C.line, borderRadius: 12, minWidth: 56, alignItems: 'center', paddingHorizontal: 11, paddingVertical: 10, opacity: punches.length && currency !== item ? .45 : 1 }}><Text style={{ color: currency === item ? C.onGreen : C.ink, fontWeight: '500', fontSize: 12 }}>{item}</Text></Pressable>)}</View><Pressable onPress={() => setShowAllCurrencies(v => !v)} style={{ alignSelf: 'flex-start', paddingVertical: 10, marginTop: 3 }}><Text style={{ color: C.green, fontSize: 12, fontWeight: '500' }}>{showAllCurrencies ? 'Show fewer currencies' : `Show ${CURRENCIES.length - 4} more currencies`}</Text></Pressable></>}
     {role === 'admin' && (workers.some(w => w.archived) || shifts.some(s => s.archived)) && <><Section title="Archived records" /><Text style={{ color: C.muted, fontSize: 12, marginBottom: 11 }}>Kept for time and pay history. Restore a record to show it in active lists again.</Text><Card style={{ padding: 0, overflow: 'hidden' }}>{workers.filter(w => w.archived).map(w => <View key={w.id} style={{ padding: 14, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: C.line }}><Text style={{ flex: 1, color: C.ink, fontWeight: '600' }}>{w.name} · worker</Text><Pressable accessibilityLabel={`Restore ${w.name}`} onPress={() => restoreWorker(w.id)}><Text style={{ color: C.green, fontWeight: '500' }}>Restore</Text></Pressable></View>)}{shifts.filter(s => s.archived).map(s => <View key={s.id} style={{ padding: 14, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: C.line }}><Text style={{ flex: 1, color: C.ink, fontWeight: '600' }}>{s.title} · shift</Text><Pressable accessibilityLabel={`Restore ${s.title}`} onPress={() => restoreShift(s.id)}><Text style={{ color: C.green, fontWeight: '500' }}>Restore</Text></Pressable></View>)}</Card></>}
-    <FeedbackControls worker={role === 'worker'} />
     {!online && <Pressable onPress={confirmReset} style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 27, padding: 5 }}><RotateCcw size={17} color={C.red} /><Text style={{ color: C.red, fontWeight: '500', fontSize: 13 }}>{t('Reset demo data')}</Text></Pressable>}
+    </View>
+    </View>
   </Screen>;
 }

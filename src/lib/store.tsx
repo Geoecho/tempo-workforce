@@ -1,9 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useContext, useEffect, useState } from 'react';
-import { activeBreak, BreakEvent, Currency, initialState, Message, parseQr, paySummary, punchCooldownSeconds, Punch, qrPayload, Shift, ShiftNotification, State, TimeApproval, teamNames, today, uid, Worker, MAX_PAID_MINUTES_PER_DAY } from './data';
+import { activeBreak, BreakEvent, Currency, initialState, Message, parseQr, paySummary, punchCooldownSeconds, Punch, qrPayload, Shift, State, TimeApproval, teamNames, today, uid, Worker, MAX_PAID_MINUTES_PER_DAY } from './data';
 import { Context, Result } from './store-context';
 import { supabase } from './supabase';
 import { OnlineStoreProvider } from './online-store';
+
+import { clockInNotifications, useNotificationInbox } from './notification-inbox';
 
 export const KEY = 'tempo-demo-v2';
 const BREAK_KEY = 'tempo-demo-breaks-v1';
@@ -11,7 +13,7 @@ const MSG_KEY = 'tempo-demo-messages-v1';
 
 function LocalStoreProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<State>(initialState);
-  const [notifications, setNotifications] = useState<ShiftNotification[]>([]);
+  const inbox = useNotificationInbox(`demo:${state.role}:${state.role === 'worker' ? state.selectedWorkerId : 'admin'}`, clockInNotifications(state));
   const [approvals, setApprovals] = useState<TimeApproval[]>([]);
   const [breaks, setBreaks] = useState<BreakEvent[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -118,7 +120,7 @@ function LocalStoreProvider({ children }: { children: React.ReactNode }) {
     setApprovals(current => approve ? [...current.filter(a => !(a.workerId === workerId && a.date === date)), { workerId, date, approvedBy: 'Demo manager', approvedAt: new Date().toISOString() }] : current.filter(a => !(a.workerId === workerId && a.date === date)));
     return { ok: true, message: approve ? 'Time approved.' : 'Approval removed.' };
   };
-  return <Context.Provider value={{ ...state, ready, online: false, syncError: null, accountEmail: null, notifications, approvals, breaks, messages, setRole, setSelectedWorker, addTeam, addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, setWorkspaceName, addShift, addShifts, updateShift, removeShift, restoreShift, scan, toggleBreak, issueQr: async shiftId => qrPayload(shiftId), markNotificationRead: async id => setNotifications(current => current.map(item => item.id === id ? { ...item, readAt: new Date().toISOString() } : item)), reviewTime, sendMessage, markMessageRead, reset, inviteWorker: async () => ({ ok: false, message: 'Online database is not configured.' }), signOut: async () => {} }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ ...state, ready, online: false, syncError: null, accountEmail: null, notifications: inbox.notifications, dismissNotification: inbox.dismissNotification, approvals, breaks, messages, setRole, setSelectedWorker, addTeam, addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, setWorkspaceName, addShift, addShifts, updateShift, removeShift, restoreShift, scan, toggleBreak, issueQr: async shiftId => qrPayload(shiftId), markNotificationRead: inbox.markLocalNotificationRead, reviewTime, sendMessage, markMessageRead, reset, inviteWorker: async () => ({ ok: false, message: 'Online database is not configured.' }), signOut: async () => {} }}>{children}</Context.Provider>;
 }
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   return supabase ? <OnlineStoreProvider>{children}</OnlineStoreProvider> : <LocalStoreProvider>{children}</LocalStoreProvider>;

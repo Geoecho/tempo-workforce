@@ -1,13 +1,13 @@
 import { getCurrentLanguage } from './i18n';
 
 export type Role = 'admin' | 'worker';
-export const CURRENCIES = ['PLN', 'EUR', 'USD', 'GBP', 'CAD', 'AUD', 'CHF', 'SEK', 'NOK', 'DKK', 'CZK', 'HUF', 'RON', 'UAH', 'AED', 'INR', 'SGD', 'JPY', 'BRL', 'MXN', 'ZAR'] as const;
+export const CURRENCIES = ['MKD', 'EUR', 'USD', 'PLN', 'GBP', 'CAD', 'AUD', 'CHF', 'SEK', 'NOK', 'DKK', 'CZK', 'HUF', 'RON', 'UAH', 'AED', 'INR', 'SGD', 'JPY', 'BRL', 'MXN', 'ZAR'] as const;
 export type Currency = typeof CURRENCIES[number];
 export type Worker = { id: string; name: string; initials: string; role: string; team: string; color: string; phone?: string; photoUri?: string; hourlyRate: number; archived?: boolean };
 export type Shift = { id: string; title: string; site: string; location: string; latitude?: number; longitude?: number; seriesId?: string; date: string; start: string; end: string; team: string; workerIds: string[]; status: 'upcoming' | 'active' | 'completed'; archived?: boolean };
 export type Punch = { id: string; shiftId: string; workerId: string; type: 'in' | 'out'; at: string; source: 'qr' | 'demo'; rateAtCheckIn?: number; workDate?: string };
 export type BreakEvent = { id: string; shiftId: string; workerId: string; type: 'start' | 'end'; at: string; workDate: string };
-export type ShiftNotification = { id: string; workerId: string; shiftId: string; kind: 'assigned' | 'changed' | 'removed'; title: string; body: string; createdAt: string; readAt: string | null };
+export type ShiftNotification = { id: string; workerId: string; shiftId: string; kind: 'assigned' | 'changed' | 'removed' | 'clocked-in'; title: string; body: string; createdAt: string; readAt: string | null };
 export type TimeApproval = { workerId: string; date: string; approvedBy: string; approvedAt: string };
 export type Message = { id: string; from: 'admin' | string; to: string | 'all'; body: string; createdAt: string; readAt: string | null };
 export type State = { role: Role; selectedWorkerId: string; currency: Currency; workspaceName?: string; teams?: string[]; workers: Worker[]; shifts: Shift[]; punches: Punch[]; messages?: Message[] };
