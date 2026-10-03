@@ -9,6 +9,7 @@ import { useStore } from '../lib/store';
 import { LANGUAGES, useLanguage } from '../lib/i18n';
 import { Avatar, Button, Card, Screen, Section, SelectionMark } from '../ui/components';
 import { FeedbackControls } from '../ui/FeedbackControls';
+import { TwoFactorSettings } from '../ui/TwoFactorSettings';
 import { ThemePreference, useTheme } from '../ui/theme';
 
 export default function Settings() {
@@ -49,7 +50,7 @@ export default function Settings() {
       <Text style={{ color: C.muted, marginTop: 7, fontSize: 12 }}>{t('Changes sync between signed-in devices.')}</Text>
       {syncError && <Text style={{ color: C.red, marginTop: 10, fontSize: 12 }}>Sync error: {syncError}</Text>}
       <Pressable accessibilityRole="button" onPress={() => void signOut()} style={{ marginTop: 15, minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: C.red, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: C.red, fontWeight: '500', fontSize: 15 }}>{t('Sign out')}</Text></Pressable>
-    </Card></>}
+    </Card><TwoFactorSettings /></>}
     {online && role === 'admin' && <View style={{ marginTop: 20 }}><Button label="Manage team invitations" variant="outline" onPress={() => router.push('/team')} /></View>}
     {!online && <><Section title="View as" /><Text style={{ color: C.muted, fontSize: 13, lineHeight: 19, marginBottom: 13 }}>{t('Switch roles to explore both sides of the workflow.')}</Text>
     <View style={{ flexDirection: 'row', gap: 10 }}>

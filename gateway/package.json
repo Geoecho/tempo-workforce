@@ -1,0 +1,19 @@
+{
+  "name": "tempo-api-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Verifies Supabase JWTs, rate-limits and allowlists Tempo data API calls before they reach Supabase.",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "ioredis": "^5.11.1",
+    "jose": "^6.2.12"
+  }
+}

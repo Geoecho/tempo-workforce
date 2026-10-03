@@ -1,0 +1,44 @@
+# Production overlay. Replace the example hosts, registry and Supabase URL, then:
+#   cp secrets.env.example secrets.env   # fill in, never commit
+#   kubectl apply -k deploy/k8s/overlays/production
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  - name: tempo-web
+    newName: ghcr.io/your-org/tempo-web
+    newTag: "1.0.0"
+  - name: tempo-gateway
+    newName: ghcr.io/your-org/tempo-gateway
+    newTag: "1.0.0"
+configMapGenerator:
+  - name: tempo-gateway
+    behavior: merge
+    literals:
+      - SUPABASE_URL=https://your-project.supabase.co
+      - ALLOWED_ORIGINS=https://tempo.example.com
+  - name: tempo-web
+    behavior: merge
+    literals:
+      - CSP_EXTRA_CONNECT_SRC=https://api.tempo.example.com
+secretGenerator:
+  - name: tempo-gateway-secrets
+    envs: [secrets.env]
+patches:
+  - target: { kind: Ingress, name: tempo-web }
+    patch: |
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: tempo.example.com
+      - op: replace
+        path: /spec/rules/0/host
+        value: tempo.example.com
+  - target: { kind: Ingress, name: tempo-gateway }
+    patch: |
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: api.tempo.example.com
+      - op: replace
+        path: /spec/rules/0/host
+        value: api.tempo.example.com

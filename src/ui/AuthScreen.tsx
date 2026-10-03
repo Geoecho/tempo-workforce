@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Platform, View } from 'react-native';
 import { Pressable } from './LocalizedPressable';
 import { Text, TextInput } from './LocalizedText';
+import { oauthProviders, providerLabel, signInWithOAuth, type OAuthProvider } from '../lib/oauth';
 import { supabase } from '../lib/supabase';
 import { AuthLayout, useAuthStyles } from './AuthLayout';
 import { useTheme } from './theme';
@@ -55,6 +56,14 @@ export function AuthScreen() {
     finally { setBusy(false); }
   };
 
+  const continueWith = async (provider: OAuthProvider) => {
+    if (!supabase || busy) return;
+    setBusy(true); setMessage(''); setSuccess(false);
+    try { await signInWithOAuth(supabase, provider, mode === 'admin' || mode === 'worker' ? mode : undefined); }
+    catch { setMessage(`Could not continue with ${providerLabel[provider]}. Please try again.`); }
+    finally { setBusy(false); }
+  };
+
   const title = mode === 'sign-in' ? 'Welcome back.' : mode === 'admin' ? 'Create your workspace' : mode === 'worker' ? 'Join your team.' : mode === 'verify' ? 'Check your inbox.' : 'Reset your password.';
   const description = mode === 'sign-in' ? 'Your shifts, people, and hours in one place.' : mode === 'admin' ? 'Create an account. Then make a space for your team.' : mode === 'worker' ? 'Use the email address your admin invited.' : mode === 'verify' ? 'Check your email to confirm this account, then sign in.' : 'We’ll email you a secure link to choose a new password.';
 
@@ -66,6 +75,7 @@ export function AuthScreen() {
       {signup && <Text style={s.hint}>{mode === 'admin' ? 'You can add teams and invite workers after creating the workspace.' : 'Use the same email address your team invited.'}</Text>}
       {!!message && <Text accessibilityRole="alert" style={success ? s.success : s.error}>{message}</Text>}
       <Pressable accessibilityRole="button" accessibilityState={{ disabled: busy }} disabled={busy} onPress={() => void submit()} style={({ pressed }) => [s.submit, { marginTop: 7, opacity: busy || pressed ? .75 : 1 }]}>{busy ? <ActivityIndicator color={C.onGreen} /> : <><Text style={s.submitText}>{mode === 'sign-in' ? 'Sign in' : mode === 'reset' ? 'Send reset link' : 'Create account'}</Text><ArrowRight size={18} color={C.onGreen} /></>}</Pressable>
+      {mode !== 'reset' && oauthProviders.length > 0 && <View style={{ marginTop: 18, gap: 10 }}>{oauthProviders.map(provider => <Pressable key={provider} accessibilityRole="button" accessibilityState={{ disabled: busy }} disabled={busy} onPress={() => void continueWith(provider)} style={({ pressed }) => ({ minHeight: 51, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center', opacity: busy || pressed ? .75 : 1 })}><Text style={{ color: C.ink, fontSize: 14, fontWeight: '500' }}>{`Continue with ${providerLabel[provider]}`}</Text></Pressable>)}</View>}
       {mode === 'sign-in' ? <View style={{ marginTop: 32, paddingTop: 23, borderTopWidth: 1, borderTopColor: C.line }}><Text style={{ fontSize: 12, color: C.muted, marginBottom: 13 }}>New to Tempo?</Text>{(['admin', 'worker'] as const).map(role => <Pressable key={role} accessibilityRole="button" onPress={() => changeMode(role)} style={({ pressed }) => ({ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12, opacity: pressed ? .6 : 1 })}>{role === 'admin' ? <Building2 size={18} color={C.green} /> : <UsersRound size={18} color={C.green} />}<Text style={{ fontSize: 13, color: C.ink, flex: 1 }}>{role === 'admin' ? 'Set up a workspace' : 'Join an existing team'}</Text><ArrowRight size={16} color={C.muted} /></Pressable>)}</View> : <Pressable accessibilityRole="button" onPress={() => changeMode('sign-in')} style={s.back}><Text style={s.backText}>Back to sign in</Text></Pressable>}
     </>}
   </AuthLayout>;

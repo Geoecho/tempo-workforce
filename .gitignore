@@ -42,3 +42,9 @@ yarn-error.*
 
 .vercel
 .serena/
+
+# Kubernetes secrets
+deploy/k8s/overlays/*/secrets.env
+
+# Local export checks (build output)
+.expo-export-check/

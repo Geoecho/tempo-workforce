@@ -80,7 +80,8 @@
         }
       ],
       "expo-asset",
-      "expo-system-ui"
+      "expo-system-ui",
+      "expo-web-browser"
     ],
     "extra": {
       "router": {},
