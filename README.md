@@ -45,7 +45,7 @@ npx expo start
 
 Press `w` for the web build, or scan Expo's development QR with Expo Go on a phone. Native-only features, including Watch connectivity, require a development/native build. If `.env.local` is absent, Tempo uses local demo data on that device; that demo is not shared across devices and demo QR codes do not provide production security.
 
-For a real shared workspace, configure the two public Supabase variables above and apply the SQL in `supabase/` in date order to the project. The publishable key can be shipped to clients; never add a service-role key to client code. Supabase sign-in and database policies enforce account roles, invitations, QR issuance, punches, and approvals.
+For a real shared workspace, configure the two public Supabase variables above and apply the SQL in `supabase/` to the project in the order listed in [docs/SECURITY.md](docs/SECURITY.md#applying-the-database-migration) (two files share a date). The publishable key can be shipped to clients; never add a service-role key to client code. Supabase sign-in and database policies enforce account roles, invitations, QR issuance, punches, and approvals.
 
 The paid-break feature needs `supabase/20260930_paid_breaks.sql`. It stores break events separately from clock punches, applies the workspace's admin/worker permissions, and allows break changes only to the checked-in worker assigned to today's shift.
 
@@ -71,5 +71,6 @@ Vercel deploys the connected Git repository to the production web URL. For local
 
 See [brand/README.md](brand/README.md) for Tempo's visual identity.
 See [docs/SHIP_READINESS.md](docs/SHIP_READINESS.md) for the release, privacy, and security review.
+See [docs/SECURITY.md](docs/SECURITY.md) for the security architecture (JWT verification, optional OAuth, rate limits), required Supabase settings, migration order, and Kubernetes deployment.
 
 In **More → Appearance**, choose System, Light, or Dark. The preference is saved on this device; it does not change the rest of the workspace.

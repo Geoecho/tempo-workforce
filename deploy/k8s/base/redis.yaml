@@ -1,0 +1,82 @@
+# Shared rate-limit counters for the gateway replicas. Counters are short-lived,
+# so there is no persistence: a restart only resets the current windows.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tempo-redis
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tempo-redis
+  labels: { app.kubernetes.io/name: tempo-redis, app.kubernetes.io/part-of: tempo }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: tempo-redis }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: tempo-redis, app.kubernetes.io/part-of: tempo }
+    spec:
+      serviceAccountName: tempo-redis
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: redis
+          image: redis:7.4-alpine
+          args:
+            - --requirepass
+            - $(REDIS_PASSWORD)
+            - --save
+            - ""
+            - --appendonly
+            - "no"
+            - --maxmemory
+            - 64mb
+            - --maxmemory-policy
+            - volatile-ttl
+            - --rename-command
+            - FLUSHALL
+            - ""
+            - --rename-command
+            - CONFIG
+            - ""
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom: { secretKeyRef: { name: tempo-gateway-secrets, key: REDIS_PASSWORD } }
+          ports:
+            - { name: redis, containerPort: 6379 }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: 25m, memory: 32Mi }
+            limits: { cpu: 250m, memory: 96Mi }
+          readinessProbe:
+            tcpSocket: { port: redis }
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket: { port: redis }
+            periodSeconds: 15
+          volumeMounts:
+            - { name: data, mountPath: /data }
+      volumes:
+        - name: data
+          emptyDir: { sizeLimit: 16Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo-redis
+  labels: { app.kubernetes.io/name: tempo-redis }
+spec:
+  selector: { app.kubernetes.io/name: tempo-redis }
+  ports:
+    - { name: redis, port: 6379, targetPort: redis }

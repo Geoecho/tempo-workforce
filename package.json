@@ -25,6 +25,7 @@
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
+    "expo-web-browser": "~57.0.3",
     "lucide-react-native": "^1.48.0",
     "motion": "^13.4.5",
     "react": "19.2.3",
@@ -40,6 +41,7 @@
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.2",
@@ -51,7 +53,9 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "build:web": "expo export --platform web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test:db": "node --test supabase/tests/migrations.test.mjs",
+    "test:gateway": "npm --prefix gateway test"
   },
   "private": true
 }

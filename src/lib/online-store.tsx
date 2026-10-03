@@ -9,10 +9,24 @@ import { useTheme } from '../ui/theme';
 import { BreakEvent, Currency, initialState, Message, newWorkspaceState, paySummary, Punch, Shift, ShiftNotification, State, TimeApproval, teamNames, today, uid, Worker } from './data';
 import { Context, Result } from './store-context';
 import { recoveryRedirect, supabase } from './supabase';
+import { consumeOAuthIntent } from './oauth';
+import { mfaChallengeNeeded } from './mfa';
+import { MfaChallenge } from '../ui/MfaChallenge';
 
 import { clockInNotifications, useNotificationInbox } from './notification-inbox';
 
 type Snapshot = { workspaceId: string; version: number; state: State; notifications?: ShiftNotification[]; approvals?: TimeApproval[] };
+
+// Tempo's RPCs (P0001), rate limits (PT…) and the gateway (GW…) raise messages
+// written for people. Anything else, such as constraint or permission errors,
+// would expose database internals, so it is replaced by the fallback.
+function userMessage(error: unknown, fallback: string): string {
+  const { code, message } = (error ?? {}) as { code?: string; message?: string };
+  if (!message) return fallback;
+  if (!code || code === 'P0001' || code.startsWith('PT') || code.startsWith('GW')) return message;
+  if (code === 'PGRST301' || code === 'PGRST303') return 'Your session expired. Please sign in again.';
+  return fallback;
+}
 const client = supabase!;
 
 export function OnlineStoreProvider({ children }: { children: React.ReactNode }) {
@@ -27,6 +41,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   const [waitingForInvite, setWaitingForInvite] = useState(false);
   const [needsWorkspaceSetup, setNeedsWorkspaceSetup] = useState(false);
   const [recoveringPassword, setRecoveringPassword] = useState(recoveryRedirect);
+  const [mfaRequired, setMfaRequired] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [workspaceId, setWorkspaceId] = useState('');
@@ -46,7 +61,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
     const { data: { subscription } } = client.auth.onAuthStateChange((event, current) => {
       if (event === 'PASSWORD_RECOVERY') setRecoveringPassword(true);
       setSession(current);
-      if (!current) { setReady(false); setWorkspaceId(''); setRecoveringPassword(false); }
+      if (!current) { setReady(false); setWorkspaceId(''); setRecoveringPassword(false); setMfaRequired(false); }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -80,7 +95,8 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
       const { error: inviteError } = await client.rpc('tempo_accept_invite');
       if (inviteError) throw inviteError;
       let current = await loadSnapshot();
-      if (!current && accountIntent === 'worker') {
+      const intent = accountIntent ?? (current ? undefined : await consumeOAuthIntent(client));
+      if (!current && intent === 'worker') {
         setWaitingForInvite(true);
         return;
       }
@@ -91,7 +107,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
       if (!current) throw new Error('Workspace could not be loaded.');
       setReady(true);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Could not connect to the workspace.');
+      setLoadError(userMessage(error, 'Could not connect to the workspace.'));
     }
   }, [loadSnapshot, accountIntent]);
 
@@ -106,14 +122,18 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   };
 
   useEffect(() => {
-    if (userId) void Promise.resolve().then(bootstrap);
+    if (!userId) return;
+    void Promise.resolve().then(async () => {
+      if (await mfaChallengeNeeded(client)) { setMfaRequired(true); return; }
+      await bootstrap();
+    });
   }, [userId, bootstrap]);
 
   useEffect(() => {
     if (!ready || !workspaceId) return;
     const timer = setInterval(() => {
       if (pendingRef.current === 0) void loadSnapshot().catch(error =>
-        setSyncError(error instanceof Error ? error.message : 'Could not refresh shared data.')
+        setSyncError(userMessage(error, 'Could not refresh shared data.'))
       );
     }, 12000);
     return () => clearInterval(timer);
@@ -155,7 +175,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
       })
       .catch(async error => {
         generationRef.current++;
-        setSyncError(error instanceof Error ? error.message : 'Could not save shared data.');
+        setSyncError(userMessage(error, 'Could not save shared data.'));
         try { await loadSnapshot(); } catch { /* Keep the original save error visible. */ }
       })
       .finally(() => { pendingRef.current--; });
@@ -194,7 +214,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
 
   const scan = async (payload: string, source: Punch['source'] = 'qr'): Promise<Result> => {
     const { data, error } = await client.rpc('tempo_record_punch', { p_payload: payload, p_source: source });
-    if (error) return { ok: false, message: error.message };
+    if (error) return { ok: false, message: userMessage(error, 'Could not record your scan. Try again.') };
     try {
       const fresh = await loadSnapshot();
       const worker = fresh?.workers.find(w => w.id === fresh.selectedWorkerId);
@@ -205,14 +225,14 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   };
   const toggleBreak = async (shiftId: string): Promise<Result> => {
     const { data, error } = await client.rpc('tempo_record_break', { p_shift_id: shiftId });
-    if (error) return { ok: false, message: error.message };
+    if (error) return { ok: false, message: userMessage(error, 'Could not update your break. Try again.') };
     await loadSnapshot();
     return data as Result;
   };
 
   const issueQr = useCallback(async (shiftId: string): Promise<string> => {
     const { data, error } = await client.rpc('tempo_issue_qr', { p_shift_id: shiftId });
-    if (error) throw error;
+    if (error) throw new Error(userMessage(error, 'Could not load a site code.'));
     return String(data);
   }, []);
   const markNotificationRead = async (id: string): Promise<void> => {
@@ -223,7 +243,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   };
   const reviewTime = async (workerId: string, date: string, approve: boolean): Promise<Result> => {
     const { error } = await client.rpc('tempo_review_time', { p_worker_id: workerId, p_date: date, p_approve: approve });
-    if (error) return { ok: false, message: error.message };
+    if (error) return { ok: false, message: userMessage(error, 'Could not update the approval. Try again.') };
     await loadSnapshot();
     return { ok: true, message: approve ? 'Time approved.' : 'Approval removed.' };
   };
@@ -236,11 +256,12 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
     const { error } = await client.from('tempo_invites').upsert({
       workspace_id: workspaceId, worker_id: workerId, email: normalized, created_by: session!.user.id,
     });
-    return error ? { ok: false, message: error.message } : { ok: true, message: 'Invitation saved. Share the join instructions below with this worker.' };
+    return error ? { ok: false, message: userMessage(error, 'Could not save the invitation. Try again.') } : { ok: true, message: 'Invitation saved. Share the join instructions below with this worker.' };
   };
 
   if (!authReady) return <View style={{ flex: 1, justifyContent: 'center' }}><ActivityIndicator color={C.green} /></View>;
   if (!session) return <AuthScreen />;
+  if (mfaRequired) return <MfaChallenge email={session.user.email ?? ''} onVerified={() => { setMfaRequired(false); void bootstrap(); }} onSignOut={async () => { await client.auth.signOut(); }} />;
   if (recoveringPassword) return <PasswordRecovery email={session.user.email ?? ''} onComplete={() => { setRecoveringPassword(false); void bootstrap(); }} />;
   if (needsWorkspaceSetup) return <WorkspaceSetup email={session.user.email ?? ''} onCreate={createWorkspace} onSignOut={async () => { await client.auth.signOut(); }} />;
   if (!ready) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: C.bg, padding: 25 }}>
@@ -259,7 +280,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
     addShift, addShifts, updateShift, removeShift, restoreShift, scan, toggleBreak, issueQr, markNotificationRead, reviewTime,
     sendMessage: async (to, body) => {
       const { error } = await client.rpc('tempo_send_message', { p_to: to, p_body: body });
-      if (error) return { ok: false, message: error.message };
+      if (error) return { ok: false, message: userMessage(error, 'Could not send the message. Try again.') };
       // Optimistic update — Realtime will sync the full list shortly
       const from = state.role === 'admin' ? 'admin' : state.selectedWorkerId;
       setMessages(current => [...current, { id: Date.now().toString(), from, to, body, createdAt: new Date().toISOString(), readAt: null }]);

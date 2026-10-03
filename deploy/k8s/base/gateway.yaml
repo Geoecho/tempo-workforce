@@ -1,0 +1,118 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tempo-gateway
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tempo-gateway
+data:
+  # Overridden per environment in the overlay.
+  SUPABASE_URL: "https://your-project.supabase.co"
+  ALLOWED_ORIGINS: "https://app.example.com"
+  RATE_LIMIT_WINDOW_SECONDS: "60"
+  RATE_LIMIT_PER_IP: "1200"
+  RATE_LIMIT_PER_USER: "600"
+  TRUST_PROXY_HOPS: "1"
+  UPSTREAM_TIMEOUT_MS: "30000"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tempo-gateway
+  labels: { app.kubernetes.io/name: tempo-gateway, app.kubernetes.io/part-of: tempo }
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels: { app.kubernetes.io/name: tempo-gateway }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: tempo-gateway, app.kubernetes.io/part-of: tempo }
+    spec:
+      serviceAccountName: tempo-gateway
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: { app.kubernetes.io/name: tempo-gateway }
+      containers:
+        - name: gateway
+          image: tempo-gateway
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: 8080 }
+          envFrom:
+            - configMapRef: { name: tempo-gateway }
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom: { secretKeyRef: { name: tempo-gateway-secrets, key: REDIS_PASSWORD } }
+            - name: REDIS_URL
+              value: "redis://:$(REDIS_PASSWORD)@tempo-redis:6379/0"
+            # Only for Supabase projects still on the legacy shared JWT secret.
+            - name: SUPABASE_JWT_SECRET
+              valueFrom: { secretKeyRef: { name: tempo-gateway-secrets, key: SUPABASE_JWT_SECRET, optional: true } }
+            - name: NODE_OPTIONS
+              value: "--max-old-space-size=384"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          lifecycle:
+            # Let the ingress stop routing before the process starts draining.
+            preStop:
+              sleep: { seconds: 5 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo-gateway
+  labels: { app.kubernetes.io/name: tempo-gateway }
+spec:
+  selector: { app.kubernetes.io/name: tempo-gateway }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tempo-gateway
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: tempo-gateway }
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tempo-gateway
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: tempo-gateway }

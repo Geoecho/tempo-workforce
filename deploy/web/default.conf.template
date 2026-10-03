@@ -1,0 +1,43 @@
+# Rendered by the nginx image's envsubst entrypoint at container start.
+# ${CSP_EXTRA_CONNECT_SRC} adds the API gateway origin (or nothing) to connect-src.
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+    server_tokens off;
+    client_max_body_size 1k;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml application/manifest+json;
+
+    # Inherited by every location below (none of them use add_header themselves).
+    # 'wasm-unsafe-eval' and fastly.jsdelivr.net: expo-camera's web QR scanner loads zxing WebAssembly from there.
+    # style-src 'unsafe-inline': react-native-web injects its styles at runtime.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://fastly.jsdelivr.net ${CSP_EXTRA_CONNECT_SRC}; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests" always;
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(self), geolocation=(self), microphone=(), payment=(), usb=(), interest-cohort=()" always;
+    add_header Cross-Origin-Opener-Policy "same-origin-allow-popups" always;
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok";
+    }
+
+    # Content-hashed bundles and assets never change.
+    location ~ ^/(_expo/static|assets)/ {
+        limit_except GET HEAD { deny all; }
+        expires max;
+        try_files $uri =404;
+    }
+
+    # Single-page app: unknown paths serve index.html, which must never be cached.
+    location / {
+        limit_except GET HEAD { deny all; }
+        expires -1;
+        try_files $uri $uri.html $uri/ /index.html;
+    }
+}

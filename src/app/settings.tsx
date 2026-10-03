@@ -8,6 +8,7 @@ import { useStore } from '../lib/store';
 import { LANGUAGES, useLanguage } from '../lib/i18n';
 import { Avatar, Card, Screen, Section, SelectionMark } from '../ui/components';
 import { FeedbackControls } from '../ui/FeedbackControls';
+import { TwoFactorSettings } from '../ui/TwoFactorSettings';
 import { ThemePreference, useTheme } from '../ui/theme';
 
 export default function Settings() {
@@ -52,7 +53,7 @@ export default function Settings() {
       <Text style={{ color: C.muted, marginTop: 7, fontSize: 12 }}>{t('Changes sync between signed-in devices.')}</Text>
       {syncError && <Text style={{ color: C.red, marginTop: 10, fontSize: 12 }}>Sync error: {syncError}</Text>}
       <Pressable onPress={() => void signOut()} style={{ marginTop: 15 }}><Text style={{ color: C.red, fontWeight: '500' }}>{t('Sign out')}</Text></Pressable>
-    </Card></>}
+    </Card><TwoFactorSettings /></>}
     {online && role === 'admin' && <><Section title="Invite a worker" /><Card>
       <Text style={{ color: C.muted, fontSize: 12, marginBottom: 12 }}>Choose a worker profile, then save the email they will use to create an account.</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 12 }}>

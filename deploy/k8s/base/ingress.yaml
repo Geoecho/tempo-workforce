@@ -1,0 +1,57 @@
+# Requires ingress-nginx and cert-manager (ClusterIssuer "letsencrypt").
+# Edge rate limits are per client IP and sit above what one person generates;
+# the gateway and the database apply the finer per-account limits.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tempo-web
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/limit-rps: "30"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+    nginx.ingress.kubernetes.io/proxy-body-size: "1k"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [app.example.com]
+      secretName: tempo-web-tls
+  rules:
+    - host: app.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: tempo-web, port: { name: http } }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tempo-gateway
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "10"
+    nginx.ingress.kubernetes.io/limit-connections: "40"
+    # Workspace snapshots can be large (profile photos are stored inline).
+    nginx.ingress.kubernetes.io/proxy-body-size: "22m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "35"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "35"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [api.example.com]
+      secretName: tempo-gateway-tls
+  rules:
+    - host: api.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: tempo-gateway, port: { name: http } }
