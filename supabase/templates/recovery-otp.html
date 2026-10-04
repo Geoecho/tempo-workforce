@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><body style="margin:0;padding:32px 20px;background:#F8F9F5;font-family:Arial,sans-serif;color:#202C27">
+  <div style="max-width:440px;margin:auto;padding:32px;background:#fff;border-radius:16px">
+    <p style="font-size:20px;font-weight:bold;color:#254E3D">tempo</p>
+    <h1 style="font-size:28px;font-weight:500">A fresh start.</h1>
+    <p style="color:#737E72;line-height:1.6">Enter this recovery code in Tempo to choose a new password.</p>
+    <p style="font-size:32px;letter-spacing:8px;font-weight:bold;padding:20px;background:#E9F0E2;border-radius:12px;text-align:center">{{ .Token }}</p>
+    <p style="color:#737E72;line-height:1.6">You can also use the secure link below.</p>
+    <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#254E3D;color:#fff;padding:16px 24px;border-radius:12px;text-decoration:none">Reset password</a>
+    <p style="margin-top:28px;font-size:12px;color:#737E72;line-height:1.6">If you didn't request this email, you can ignore it.</p>
+  </div>
+</body></html>

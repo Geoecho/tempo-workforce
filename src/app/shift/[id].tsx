@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { CalendarDays, Clock3, MapPin, Navigation2, Pencil, Phone, QrCode, ScanLine, Trash2 } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { View } from 'react-native';
+import { Platform, useWindowDimensions, View } from 'react-native';
 import { Pressable } from '../../ui/LocalizedPressable';
 import { Text } from '../../ui/LocalizedText';
 import { lateMinutes, activeBreak, durationMinutes, formatDay, formatMoney, formatTime, hoursLabel, localDate, shiftHasEnded, today } from '../../lib/data';
@@ -16,6 +16,8 @@ import { ShiftPay, ShiftRoles } from '../../ui/extras-ui';
 
 export default function ShiftDetail() {
   const C = useTheme().colors;
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 960;
   const { id } = useLocalSearchParams<{ id: string }>();
   const { shifts, workers, punches, breaks, toggleBreak, selectedWorkerId, role, currency, removeShift } = useStore();
   const [breakBusy, setBreakBusy] = useState(false);
@@ -48,16 +50,16 @@ export default function ShiftDetail() {
     if (openCount) return;
     confirmRemoval('Remove shift?', hasHistory ? 'This shift will leave the schedule. Its clock and pay history will remain.' : 'This shift will be removed from the schedule.', () => { removeShift(shift.id); router.replace('/schedule'); });
   };
-  return <Screen back>
+  return <Screen back focused={false} title="Shift details" subtitle="Schedule, team, and time records.">
     <Pill tone={shift.archived || (ended && !onSite) ? 'gray' : 'green'}>{shift.archived ? 'ARCHIVED' : onSite ? 'ACTIVE' : ended ? 'FINISHED' : shift.status.toUpperCase()}</Pill>
     <Text style={{ fontSize: 29, fontWeight: '500', color: C.ink, marginTop: 14, letterSpacing: -.7 }}>{shift.title}</Text><Text style={{ color: C.muted, fontSize: 15, marginTop: 5 }}>{shift.site}</Text>
     <Card style={{ marginTop: 25 }}><View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 18 }}><CalendarDays size={18} color={C.green} /><Text style={{ color: C.ink, fontWeight: '600', marginLeft: 12 }}>{formatDay(shift.date)}</Text></View><View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 18 }}><Clock3 size={18} color={C.green} /><Text style={{ color: C.ink, fontWeight: '600', marginLeft: 12 }}>{shift.start} – {shift.end}</Text></View><View style={{ flexDirection: 'row', alignItems: 'center' }}><MapPin size={18} color={C.green} /><Text style={{ color: C.ink, fontWeight: '600', marginLeft: 12 }}>{shift.location}</Text></View></Card>
     <Pressable accessibilityRole="button" onPress={() => void openSiteMap(shift, true)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 46, marginTop: 10, borderRadius: 12, backgroundColor: C.mint }}><Navigation2 size={17} color={C.green} /><Text style={{ color: C.green, fontSize: 14, fontWeight: '600' }}>Get directions to site</Text></Pressable>
     {!ended && !shift.archived && <CalendarAction shift={shift} />}
-    {canScan && (role === 'admin' ? <View style={{ marginTop: 13 }}><Button label="Display site QR code" icon={<QrCode size={18} color={C.onGreen} />} onPress={() => router.push({ pathname: '/pass', params: { shiftId: shift.id } })} /></View> : <View style={{ marginTop: 13 }}><Button label="Scan to clock in or out" icon={<QrCode size={18} color={C.onGreen} />} onPress={() => router.push('/scan')} /></View>)}
+    {canScan && (role === 'admin' ? <View style={{ marginTop: 13 }}><Button label="Display site QR code" icon={<QrCode size={18} color={C.onGreen} />} onPress={() => router.push({ pathname: '/pass', params: { shiftId: shift.id } })} /></View> : !desktop && <View style={{ marginTop: 13 }}><Button label="Scan to clock in or out" icon={<QrCode size={18} color={C.onGreen} />} onPress={() => router.push('/scan')} /></View>)}
     {role === 'worker' && canScan && myOpenPunch && <Pressable accessibilityRole="button" disabled={breakBusy} onPress={() => void changeBreak()} style={{ marginTop: 10, minHeight: 45, borderRadius: 12, backgroundColor: C.mint, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: C.green, fontSize: 13, fontWeight: '600' }}>{breakBusy ? 'Saving…' : myBreak ? 'End paid break' : 'Start paid break'}</Text></Pressable>}
     {!!breakMessage && <Text style={{ color: C.green, fontSize: 12, marginTop: 7 }}>{breakMessage}</Text>}
-    {role === 'admin' && !shift.archived && !ended && <View style={{ marginTop: 10 }}><Button label="Scan worker to assign" variant="outline" icon={<ScanLine size={18} color={C.green} />} onPress={() => router.push({ pathname: '/scan-worker', params: { shiftId: shift.id } })} /></View>}
+    {role === 'admin' && !desktop && !shift.archived && !ended && <View style={{ marginTop: 10 }}><Button label="Scan worker to assign" variant="outline" icon={<ScanLine size={18} color={C.green} />} onPress={() => router.push({ pathname: '/scan-worker', params: { shiftId: shift.id } })} /></View>}
     {role === 'admin' && !shift.archived && <View style={{ flexDirection: 'row', gap: 9, marginTop: 10 }}><View style={{ flex: 1 }}><Pressable accessibilityRole="button" onPress={() => router.push(`/edit-shift/${shift.id}` as never)} style={({ pressed }) => ({ minHeight: 48, borderRadius: 13, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: pressed ? .7 : 1 })}><Pencil size={16} color={C.green} /><Text style={{ color: C.green, fontWeight: '500', fontSize: 14 }}>Edit shift</Text></Pressable></View>{openCount === 0 && <View style={{ flex: 1 }}><Button label="Remove" variant="danger" icon={<Trash2 size={16} color={C.red} />} onPress={remove} /></View>}</View>}
     {role === 'admin' && openCount > 0 && <Text style={{ color: C.muted, fontSize: 11, marginTop: 7 }}>{canScan ? 'Check out everyone on site before removing this shift.' : 'A check-out is missing from this shift. Resolve the time record before removal.'}</Text>}
     <Section title="Assigned team" />

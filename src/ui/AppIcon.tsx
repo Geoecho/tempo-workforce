@@ -1,9 +1,9 @@
-import { ArrowRight, Bell, QrCode } from 'lucide-react-native';
+import { ArrowRight, Bell, CalendarClock, History, PanelLeftClose, PanelLeftOpen, QrCode } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, View } from 'react-native';
+import { AccessibilityInfo, Animated, Platform, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
-export type AppIconName = 'home' | 'calendar' | 'team' | 'time' | 'settings' | 'scan' | 'bell' | 'arrow-right';
+export type AppIconName = 'home' | 'calendar' | 'upcoming' | 'history' | 'panel-open' | 'panel-close' | 'team' | 'time' | 'settings' | 'scan' | 'bell' | 'arrow-right';
 type Props = { name: AppIconName; size?: number; color?: string; playing?: boolean };
 const svgProps = { fill: 'none' as const, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, strokeWidth: 2 };
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -51,20 +51,20 @@ export function AppIcon({ name, size = 20, color = '#254E3D', playing = false }:
 
     if (playing) {
       if (name === 'settings') {
-        Animated.spring(progress, { toValue: 1, friction: 5, tension: 50, useNativeDriver: true }).start();
+        Animated.spring(progress, { toValue: 1, friction: 5, tension: 50, useNativeDriver: Platform.OS !== 'web' }).start();
       } else if (name === 'bell') {
         progress.setValue(0);
-        Animated.timing(progress, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+        Animated.timing(progress, { toValue: 1, duration: 500, useNativeDriver: Platform.OS !== 'web' }).start();
       } else if (name === 'team' || name === 'arrow-right') {
         progress.setValue(0);
-        Animated.spring(progress, { toValue: 1, friction: 5, tension: 200, useNativeDriver: true }).start();
+        Animated.spring(progress, { toValue: 1, friction: 5, tension: 200, useNativeDriver: Platform.OS !== 'web' }).start();
       } else {
         progress.setValue(0);
-        Animated.timing(progress, { toValue: 1, duration: name === 'calendar' ? 850 : 600, useNativeDriver: false }).start();
+        Animated.timing(progress, { toValue: 1, duration: name === 'calendar' ? 700 : 500, useNativeDriver: false }).start();
       }
     } else {
       if (name === 'settings') {
-        Animated.spring(progress, { toValue: 0, friction: 5, tension: 50, useNativeDriver: true }).start();
+        Animated.spring(progress, { toValue: 0, friction: 5, tension: 50, useNativeDriver: Platform.OS !== 'web' }).start();
       } else {
         progress.setValue(1);
       }
@@ -73,6 +73,10 @@ export function AppIcon({ name, size = 20, color = '#254E3D', playing = false }:
 
   const svg = (children: React.ReactNode) => <Svg width={size} height={size} viewBox="0 0 24 24" stroke={color} {...svgProps}>{children}</Svg>;
 
+  if (name === 'upcoming' || name === 'history' || name === 'panel-open' || name === 'panel-close') {
+    const Icon = name === 'upcoming' ? CalendarClock : name === 'history' ? History : name === 'panel-open' ? PanelLeftOpen : PanelLeftClose;
+    return <Animated.View style={{ transform: [{ rotate: progress.interpolate({ inputRange: [0, 1], outputRange: name === 'history' ? ['-35deg', '0deg'] : ['0deg', '0deg'] }) }, { translateX: progress.interpolate({ inputRange: [0, .5, 1], outputRange: name.startsWith('panel') ? [0, 3, 0] : [0, 0, 0] }) }] }}><Icon size={size} color={color} /></Animated.View>;
+  }
   if (name === 'home') return svg(<>
     <Path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
     <DrawPath d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" length={24} progress={progress} />

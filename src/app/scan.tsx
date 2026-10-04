@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, View } from 'react-native';
 import { Pressable } from '../ui/LocalizedPressable';
 import { Text } from '../ui/LocalizedText';
-import { formatMoney, hoursLabel, payTimeLabel, PaySummary, qrPayload, today } from '../lib/data';
+import { clockShiftAvailable, formatMoney, hoursLabel, payTimeLabel, PaySummary, qrPayload } from '../lib/data';
 import { useFeedback } from '../lib/feedback';
 import { useStore } from '../lib/store';
 import { useLanguage } from '../lib/i18n';
@@ -20,6 +20,8 @@ export default function Scan() {
   const { role, shifts, punches, selectedWorkerId, scan, currency, online } = useStore();
   const [permission, requestPermission] = useCameraPermissions();
   const focused = useIsFocused();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(timer); }, []);
   useEffect(() => { if (permission && !permission.granted && permission.canAskAgain) void requestPermission(); }, [permission, requestPermission]);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -36,7 +38,7 @@ export default function Scan() {
     setBusy(false);
     play(response.ok ? 'confirm' : 'decline');
   };
-  const assigned = shifts.filter(s => !s.archived && s.workerIds.includes(selectedWorkerId) && s.date === today());
+  const assigned = shifts.filter(s => clockShiftAvailable(s, punches, now, selectedWorkerId) && s.workerIds.includes(selectedWorkerId));
   const latestByShift = new Map(punches.filter(p => p.workerId === selectedWorkerId).sort((a, b) => a.at.localeCompare(b.at)).map(p => [p.shiftId, p]));
   const current = shifts.find(s => !s.archived && s.workerIds.includes(selectedWorkerId) && latestByShift.get(s.id)?.type === 'in');
   const nextAction = current ? 'Ready to clock out' : assigned.length === 1 ? 'Ready to clock in' : 'Ready to scan';

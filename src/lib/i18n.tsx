@@ -1,8 +1,11 @@
+import { getCurrentLanguage, setActiveLanguage } from './locale';
+import { planningTranslations, planningPatterns } from './planning-translations';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import generatedTranslations from './translations.generated.json';
 import { brandTranslations } from './brand-translations';
 import { reviewedTranslations } from './reviewed-translations';
+import { featurePatterns, featureTranslations } from './feature-translations';
 
 export type Language = 'en-US' | 'mk-MK' | 'sq-AL';
 export const LANGUAGES: { code: Language; label: string; short: string }[] = [
@@ -181,8 +184,7 @@ const translations: Record<Exclude<Language, 'en-US'>, Record<string, string>> =
 type LanguageContextValue = { language: Language; setLanguage: (value: Language) => void; t: (english: string) => string };
 const LanguageContext = createContext<LanguageContextValue>({ language: 'en-US', setLanguage: () => {}, t: value => value });
 const STORAGE_KEY = 'tempo.language';
-let activeLanguage: Language = 'en-US';
-export const getCurrentLanguage = () => activeLanguage;
+export { getCurrentLanguage } from './locale';
 function languageFromUrl(): Language | null {
   if (typeof window === 'undefined' || !window.location?.search) return null;
   const value = new URLSearchParams(window.location.search).get('lang');
@@ -217,7 +219,8 @@ const dynamicTranslations: Record<Exclude<Language, 'en-US'>, Record<string, str
 };
 
 function translateDynamic(value: string, language: Exclude<Language, 'en-US'>) {
-  for (const [pattern, translation] of Object.entries(dynamicTranslations[language])) {
+  const features = Object.fromEntries(Object.entries({ ...featurePatterns, ...planningPatterns }).map(([key, pair]) => [key, pair[language === 'mk-MK' ? 0 : 1]]));
+  for (const [pattern, translation] of Object.entries({ ...dynamicTranslations[language], ...features })) {
     const parts = pattern.split(/\{\d+\}/);
     const expression = new RegExp('^' + parts.map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('(.+?)') + '$');
     const match = value.match(expression);
@@ -226,20 +229,20 @@ function translateDynamic(value: string, language: Exclude<Language, 'en-US'>) {
   return value;
 }
 
-export function translateUi(english: string, language: Language = activeLanguage) {
+export function translateUi(english: string, language: Language = getCurrentLanguage()) {
   if (language === 'en-US') return english;
   const match = english.match(/^(\s*)(.*?)(\s*)$/s);
   if (!match) return english;
   const [, before, key, after] = match;
   const generated = generatedTranslations[language] as Record<string, string>;
-  return before + (reviewedTranslations[key]?.[language === 'mk-MK' ? 0 : 1] ?? brandTranslations[key]?.[language === 'mk-MK' ? 0 : 1] ?? translations[language][key] ?? generated[key] ?? translateDynamic(key, language)) + after;
+  return before + (planningTranslations[key]?.[language === 'mk-MK' ? 0 : 1] ?? featureTranslations[key]?.[language === 'mk-MK' ? 0 : 1] ?? reviewedTranslations[key]?.[language === 'mk-MK' ? 0 : 1] ?? brandTranslations[key]?.[language === 'mk-MK' ? 0 : 1] ?? translations[language][key] ?? generated[key] ?? translateDynamic(key, language)) + after;
 }
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setCurrentLanguage] = useState<Language>(() => { activeLanguage = languageFromUrl() ?? 'en-US'; return activeLanguage; });
-  useEffect(() => { const linked = languageFromUrl(); if (linked) { void AsyncStorage.setItem(STORAGE_KEY, linked); return; } AsyncStorage.getItem(STORAGE_KEY).then(value => { if (LANGUAGES.some(item => item.code === value)) { activeLanguage = value as Language; setCurrentLanguage(value as Language); } }).catch(() => {}); }, []);
+  const [language, setCurrentLanguage] = useState<Language>(() => { const initial = languageFromUrl() ?? 'en-US'; setActiveLanguage(initial); return initial; });
+  useEffect(() => { const linked = languageFromUrl(); if (linked) { void AsyncStorage.setItem(STORAGE_KEY, linked); return; } AsyncStorage.getItem(STORAGE_KEY).then(value => { if (LANGUAGES.some(item => item.code === value)) { setActiveLanguage(value as Language); setCurrentLanguage(value as Language); } }).catch(() => {}); }, []);
   const setLanguage = (value: Language) => {
-    activeLanguage = value;
+    setActiveLanguage(value);
     setCurrentLanguage(value);
     void AsyncStorage.setItem(STORAGE_KEY, value);
     if (typeof window !== 'undefined' && window.location?.search) {

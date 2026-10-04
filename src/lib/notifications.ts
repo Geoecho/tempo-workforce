@@ -28,3 +28,5 @@ export const addNotificationResponseReceivedListener: typeof N.addNotificationRe
 export const AndroidImportance = (mod?.AndroidImportance ?? { DEFAULT: 3 }) as typeof N.AndroidImportance;
 export const IosAuthorizationStatus = (mod?.IosAuthorizationStatus ?? { PROVISIONAL: 3 }) as typeof N.IosAuthorizationStatus;
 export const SchedulableTriggerInputTypes = (mod?.SchedulableTriggerInputTypes ?? { DATE: 'date' }) as typeof N.SchedulableTriggerInputTypes;
+
+export const getExpoPushTokenAsync: typeof N.getExpoPushTokenAsync = mod?.getExpoPushTokenAsync ?? (async () => { throw new Error('Push notifications need an installed build.'); });

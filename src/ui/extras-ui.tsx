@@ -8,6 +8,7 @@ import { RoleTag, Task, useExtras } from '../lib/extras';
 import { takeProofPhoto } from '../lib/proof-photo';
 import { Button, Card, Section } from './components';
 import { useTheme } from './theme';
+import { monthlyHourlyRate } from '../lib/monthly-pay';
 
 export function RoleChip({ role, currency }: { role: RoleTag; currency?: Currency }) {
   return <View style={{ backgroundColor: role.color, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 }}>
@@ -56,36 +57,53 @@ function TaskRow({ task, canComplete, canManage }: { task: Task; canComplete: bo
   const { completeTask, reopenTask, removeTask } = useExtras();
   const [error, setError] = useState('');
   const done = !!task.doneAt;
+  const [showProof, setShowProof] = useState(false);
+  const [busy, setBusy] = useState(false);
   const finish = async () => {
-    try { const uri = await takeProofPhoto(); if (uri) completeTask(task.id, uri); else setError('A photo is required to finish this task.'); }
+    if (busy) return;
+    setBusy(true); setError('');
+    try { const uri = await takeProofPhoto(); if (uri) await completeTask(task.id, uri); else setError('A photo is required to finish this task.'); }
     catch (e) { setError(e instanceof Error ? e.message : 'Could not attach the photo.'); }
+    finally { setBusy(false); }
   };
   return <View style={{ padding: 14, gap: 10 }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
       <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: C.green, backgroundColor: done ? C.green : 'transparent', alignItems: 'center', justifyContent: 'center' }}>{done && <Check size={13} color={C.onGreen} />}</View>
       <View style={{ flex: 1 }}><Text style={{ color: C.ink, fontSize: 14, fontWeight: '500', textDecorationLine: done ? 'line-through' : 'none' }}>{task.title}</Text>{done && <Text style={{ color: C.muted, fontSize: 11, marginTop: 2 }}>Done {formatDay(task.doneAt!.slice(0, 10))} · photo attached</Text>}</View>
-      {canManage && <Pressable accessibilityLabel="Delete task" onPress={() => removeTask(task.id)} style={{ padding: 6 }}><Trash2 size={16} color={C.muted} /></Pressable>}
+      {canManage && <Pressable accessibilityLabel="Delete task" onPress={() => { void removeTask(task.id).catch(e => setError(e.message)); }} style={{ padding: 6 }}><Trash2 size={16} color={C.muted} /></Pressable>}
     </View>
-    {done && !!task.proofUri && <Image source={{ uri: task.proofUri }} style={{ width: '100%', maxWidth: 320, height: 180, borderRadius: 12, backgroundColor: C.subtle }} resizeMode="cover" />}
-    {!done && canComplete && <Pressable accessibilityRole="button" onPress={() => void finish()} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.green, borderRadius: 12, minHeight: 42 }}><Camera size={16} color={C.onGreen} /><Text style={{ color: C.onGreen, fontWeight: '500', fontSize: 13 }}>Take photo to finish</Text></Pressable>}
-    {done && canComplete && <Pressable onPress={() => reopenTask(task.id)}><Text style={{ color: C.muted, fontSize: 12 }}>Reopen task</Text></Pressable>}
+    {done && !!task.proofUri && <Button label={showProof ? 'Hide photo' : 'View photo'} small variant="outline" onPress={() => setShowProof(value => !value)} />}
+    {done && !!task.proofUri && showProof && <Image source={{ uri: task.proofUri }} style={{ width: '100%', maxWidth: 320, height: 180, borderRadius: 12, backgroundColor: C.subtle }} resizeMode="cover" />}
+    {!done && canComplete && <Pressable accessibilityRole="button" disabled={busy} onPress={() => void finish()} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: C.green, borderRadius: 12, minHeight: 48 }}><Camera size={16} color={C.onGreen} /><Text style={{ color: C.onGreen, fontWeight: '500', fontSize: 13, flexShrink: 1, textAlign: 'center' }}>{busy ? 'Saving…' : 'Take photo to finish'}</Text></Pressable>}
+    {done && canComplete && <Pressable onPress={() => { void reopenTask(task.id).catch(e => setError(e.message)); }}><Text style={{ color: C.muted, fontSize: 12 }}>Reopen task</Text></Pressable>}
     {!!error && <Text style={{ color: C.red, fontSize: 12 }}>{error}</Text>}
   </View>;
 }
 
 /** Tasks for one person. Admin adds and removes; the worker finishes with a photo. */
-export function TaskList({ workerId, admin }: { workerId: string; admin: boolean }) {
+export function TaskList({ workerId, admin, status = 'all', query = '', taskId }: { workerId: string; admin: boolean; status?: 'all' | 'pending' | 'completed'; query?: string; taskId?: string }) {
   const C = useTheme().colors;
-  const { tasks, addTask } = useExtras();
+  const { tasks, addTask, taskError, tasksReady } = useExtras();
   const [title, setTitle] = useState('');
-  const mine = tasks.filter(t => t.workerId === workerId).sort((a, b) => Number(!!a.doneAt) - Number(!!b.doneAt) || b.createdAt.localeCompare(a.createdAt));
-  const add = () => { if (!title.trim()) return; addTask(workerId, title); setTitle(''); };
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [limit, setLimit] = useState(10);
+  const mine = tasks.filter(t => t.workerId === workerId && (!taskId || t.id === taskId) && t.title.toLowerCase().includes(query.toLowerCase()) && (status === 'all' || (status === 'completed') === !!t.doneAt)).sort((a, b) => Number(!!a.doneAt) - Number(!!b.doneAt) || b.createdAt.localeCompare(a.createdAt));
+  const add = async () => {
+    if (!title.trim() || saving) return;
+    setSaving(true); setError('');
+    try { await addTask(workerId, title); setTitle(''); }
+    catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not save this task. Please try again.'); }
+    finally { setSaving(false); }
+  };
   return <View>
     {admin && <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
       <TextInput accessibilityLabel="New task" value={title} onChangeText={setTitle} onSubmitEditing={add} placeholder="Add a task for this person" placeholderTextColor={C.placeholder} style={{ flex: 1, borderWidth: 1, borderColor: C.line, borderRadius: 11, paddingHorizontal: 12, color: C.ink, backgroundColor: C.surface, fontSize: 14, minHeight: 44 }} />
-      <Pressable accessibilityRole="button" accessibilityLabel="Add task" onPress={add} style={{ width: 44, borderRadius: 11, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center' }}><Plus size={18} color={C.onGreen} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Add task" disabled={saving || !tasksReady} onPress={() => void add()} style={{ width: 44, borderRadius: 11, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center', opacity: saving || !tasksReady ? .5 : 1 }}><Plus size={18} color={C.onGreen} /></Pressable>
     </View>}
-    {mine.length ? <Card style={{ padding: 0, overflow: 'hidden' }}>{mine.map((t, i) => <View key={t.id} style={{ borderTopWidth: i ? 1 : 0, borderTopColor: C.line }}><TaskRow task={t} canComplete={!admin} canManage={admin} /></View>)}</Card> : <Card><Text style={{ color: C.muted, fontSize: 13 }}>{admin ? 'No tasks yet.' : 'No tasks assigned to you.'}</Text></Card>}
+    {!!(error || taskError) && <Text accessibilityRole="alert" style={{ color: C.red, fontSize: 12, lineHeight: 18, marginBottom: 12 }}>{error || taskError}</Text>}
+    {mine.length > limit && <Button label="View more tasks" small variant="outline" onPress={() => setLimit(value => value + 10)} />}
+    {!tasksReady ? <Card><Text>Loading tasks…</Text></Card> : mine.length ? <Card style={{ padding: 0, overflow: 'hidden' }}>{mine.slice(0, limit).map((t, i) => <View key={t.id} style={{ borderTopWidth: i ? 1 : 0, borderTopColor: C.line }}><TaskRow task={t} canComplete={!admin} canManage={admin} /></View>)}</Card> : !taskError && <Text style={{ color: C.muted, fontSize: 13, lineHeight: 19, paddingVertical: 8 }}>{admin ? 'No tasks yet.' : 'No tasks assigned to you.'}</Text>}
   </View>;
 }
 
@@ -126,13 +144,16 @@ export function PayEditor({ workerId, currency, hourlyRate }: { workerId: string
   const current = pay[workerId] ?? { type: 'hourly' as PayType, amount: 0 };
   const [type, setType] = useState<PayType>(current.type);
   const [amount, setAmount] = useState(current.amount ? String(current.amount) : '');
+  const [monthlyHours, setMonthlyHours] = useState(String(current.monthlyHours ?? 160));
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const save = () => {
     if (type === 'hourly') { setWorkerPay(workerId, { type, amount: 0 }); setSaved(true); setError(''); return; }
     const value = Number(amount.replace(',', '.'));
     if (!Number.isFinite(value) || value <= 0 || value > 1_000_000) return setError('Enter an amount above zero.');
-    setWorkerPay(workerId, { type, amount: Math.round(value * 100) / 100 });
+    const hours = Number(monthlyHours.replace(',', '.'));
+    if (type === 'fixed' && (monthlyHourlyRate(value, hours) ?? 0) <= 0) return setError('Enter monthly hours between 1 and 744.');
+    setWorkerPay(workerId, { type, amount: Math.round(value * 100) / 100, ...(type === 'fixed' ? { monthlyHours: hours } : {}) });
     setSaved(true); setError('');
   };
   const unit = PAY_TYPES.find(p => p.id === type)!.unit;
@@ -148,7 +169,8 @@ export function PayEditor({ workerId, currency, hourlyRate }: { workerId: string
         ? <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, marginTop: 12 }}>Paid by the hour at {formatMoney(Math.round(hourlyRate * 100), currency)}/hour (the rate above). Pay builds second by second while checked in.</Text>
         : <>
           <TextInput accessibilityLabel="Pay amount" value={amount} onChangeText={t => { setAmount(t); setSaved(false); }} placeholder={`Amount ${unit} (${currency})`} placeholderTextColor={C.placeholder} keyboardType="decimal-pad" style={{ marginTop: 12, borderWidth: 1, borderColor: C.line, borderRadius: 11, padding: 12, color: C.ink, backgroundColor: C.surface }} />
-          <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, marginTop: 10 }}>{type === 'event' ? 'A flat amount for every shift they check in to, whatever the hours. A shift can override it on its own page.' : 'A monthly salary. Each day they check in earns an equal share of the month.'}</Text>
+          {type === 'fixed' && <><Text style={{ color: C.ink, fontSize: 12, marginTop: 14, marginBottom: 8 }}>Contracted hours per month</Text><TextInput accessibilityLabel="Contracted hours per month" value={monthlyHours} onChangeText={value => { setMonthlyHours(value); setSaved(false); }} keyboardType="decimal-pad" style={{ borderWidth: 1, borderColor: C.line, borderRadius: 11, padding: 12, color: C.ink, backgroundColor: C.surface }} /><Text style={{ color: C.green, fontSize: 13, lineHeight: 20, marginTop: 10 }}>Hourly equivalent: {formatMoney(Math.round((monthlyHourlyRate(Number(amount.replace(',', '.')), Number(monthlyHours.replace(',', '.'))) ?? 0) * 100), currency)}/h</Text><Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, marginTop: 4 }}>Calculated from monthly salary divided by contracted monthly hours. Adjust 160 hours to match the contract.</Text></>}
+          <Text style={{ color: C.muted, fontSize: 12, lineHeight: 18, marginTop: 10 }}>{type === 'event' ? 'A flat amount for every shift they check in to, whatever the hours. A shift can override it on its own page.' : 'Monthly salary is prorated by recorded paid hours using the hourly equivalent. Previous check-ins keep their original rate.'}</Text>
         </>}
       {!!error && <Text style={{ color: C.red, fontSize: 12, marginTop: 8 }}>{error}</Text>}
       <View style={{ marginTop: 12 }}><Button label={saved ? 'Saved' : 'Save pay'} onPress={save} /></View>

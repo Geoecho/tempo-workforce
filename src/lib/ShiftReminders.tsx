@@ -48,7 +48,9 @@ async function syncReminders(shifts: ReminderShift[]) {
     });
   }
   for (const shift of shifts.filter(item => item.checkedIn)) {
-    const end = new Date(`${shift.date}T${shift.end}:00`).getTime();
+    const endDate = new Date(`${shift.date}T${shift.end}:00`);
+    if (shift.end < shift.start) endDate.setDate(endDate.getDate() + 1);
+    const end = endDate.getTime();
     if (!Number.isFinite(end) || end <= Date.now() + 30_000) continue;
     const reminder = Math.max(Date.now() + 30_000, end - 15 * 60 * 1000);
     await Notifications.scheduleNotificationAsync({
@@ -64,7 +66,7 @@ function enqueue(shifts: ReminderShift[]) {
 }
 
 export function ShiftReminders() {
-  const { ready, role, selectedWorkerId, shifts, punches, notifications } = useStore();
+  const { ready, role, selectedWorkerId, shifts, punches, notifications, online } = useStore();
   const { ready: feedbackReady, reminders } = useFeedback();
   const seenNotifications = useRef<Set<string> | null>(null);
   const specification = JSON.stringify(shifts
@@ -86,6 +88,7 @@ export function ShiftReminders() {
         Notifications.clearLastNotificationResponse();
         return;
       }
+      if (data?.kind === 'tempo-task-completed') { if (role === 'admin') router.push({ pathname: '/tasks', params: { taskId: typeof data.taskId === 'string' ? data.taskId : '' } }); else router.push('/notifications'); Notifications.clearLastNotificationResponse(); return; }
       if (data?.kind !== KIND && data?.kind !== 'tempo-shift-change') return;
       const shiftId = data.shiftId;
       const canOpen = typeof shiftId === 'string' && shifts.some(shift => shift.id === shiftId && !shift.archived && shift.workerIds.includes(selectedWorkerId));
@@ -96,10 +99,10 @@ export function ShiftReminders() {
     if (last) open(last);
     const subscription = Notifications.addNotificationResponseReceivedListener(open);
     return () => subscription.remove();
-  }, [shifts, selectedWorkerId]);
+  }, [shifts, selectedWorkerId, role]);
 
   useEffect(() => {
-    if (!ready || !feedbackReady || !reminders || role !== 'worker') {
+    if (online || !ready || !feedbackReady || !reminders || role !== 'worker') {
       seenNotifications.current = null;
       return;
     }
@@ -114,6 +117,6 @@ export function ShiftReminders() {
       }
     }
     seenNotifications.current = ids;
-  }, [ready, feedbackReady, reminders, role, notifications]);
+  }, [ready, feedbackReady, reminders, role, notifications, online]);
   return null;
 }

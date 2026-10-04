@@ -8,6 +8,7 @@ import { LanguagePicker } from './LanguagePicker';
 import { Pressable } from './LocalizedPressable';
 import { Text } from './LocalizedText';
 import { ThemeColors, useTheme } from './theme';
+import { AuthMotion } from './AuthMotion';
 
 export function AuthLayout({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   const C = useTheme().colors;
@@ -35,7 +36,7 @@ export function AuthLayout({ title, description, children }: { title: string; de
     <View style={{ flex: 1, flexDirection: desktop ? 'row' : 'column' }}>
       {desktop && <View style={s.story}><View style={{ maxWidth: 420, zIndex: 1 }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 38 }}><View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: '#ABC19A' }} /><Text style={s.storyEyebrow}>People. Time. In sync.</Text></View><Text style={s.storyTitle}>Every shift,</Text><Text style={[s.storyTitle, { color: '#9BB18E' }]}>in sync.</Text><Text style={s.storyCopy}>The operating space for teams in motion.</Text></View><Animated.View pointerEvents="none" style={{ position: 'absolute', right: -42, bottom: -45, opacity: .18, transform: [{ translateY: motion.interpolate({ inputRange: [0, 1], outputRange: [0, -22] }) }, { rotate: '4deg' }] }}><BrandMark size={365} color="#BED1AE" /></Animated.View><Pressable accessibilityRole="link" onPress={() => router.replace('/welcome')} style={s.storyLink}><Text style={{ color: '#C6D6BD', fontSize: 12 }}>Explore Tempo</Text><ArrowUpRight size={16} color="#C6D6BD" /></Pressable></View>}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={[s.scroll, { paddingTop: desktop ? 42 : 40, paddingBottom: 42 }]} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} showsVerticalScrollIndicator={false}>
-        <View style={s.form}><Text accessibilityRole="header" style={s.title}>{title}</Text><Text style={s.description}>{description}</Text>{children}</View>
+        <View style={s.form}><AuthMotion key={title}><Text accessibilityRole="header" style={s.title}>{title}</Text><Text style={s.description}>{description}</Text></AuthMotion>{children}</View>
       </ScrollView>
     </View>
   </KeyboardAvoidingView></SafeAreaView>;
@@ -51,9 +52,9 @@ function makeLayoutStyles(C: ThemeColors) { return StyleSheet.create({
 
 function makeAuthStyles(C: ThemeColors) { return StyleSheet.create({
   label: { color: C.ink, fontSize: 12, fontWeight: '500', marginBottom: 9 },
-  input: { minHeight: 51, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 14, fontSize: 15, color: C.ink, marginBottom: 20 }, focused: { borderColor: C.green, backgroundColor: C.field },
-  password: { minHeight: 51, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, flexDirection: 'row', alignItems: 'center', marginBottom: 15 }, passwordInput: { flex: 1, minHeight: 49, paddingHorizontal: 14, fontSize: 15, color: C.ink }, eye: { width: 46, minHeight: 49, alignItems: 'center', justifyContent: 'center' },
-  submit: { minHeight: 51, borderRadius: 8, backgroundColor: C.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 15 }, submitText: { color: C.onGreen, fontSize: 14, fontWeight: '500' },
+  input: { minHeight: 54, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 16, fontSize: 16, color: C.ink, marginBottom: 20 }, focused: { borderColor: C.accent, backgroundColor: C.field },
+  password: { minHeight: 54, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, flexDirection: 'row', alignItems: 'center', marginBottom: 20 }, passwordInput: { flex: 1, minHeight: 52, paddingHorizontal: 16, fontSize: 16, color: C.ink }, eye: { width: 48, minHeight: 52, alignItems: 'center', justifyContent: 'center' },
+  submit: { minHeight: 54, borderRadius: 12, backgroundColor: C.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 15 }, submitText: { color: C.onGreen, fontSize: 14, fontWeight: '500' },
   error: { color: C.red, fontSize: 12, lineHeight: 19, marginBottom: 16 }, success: { color: C.green, fontSize: 13, lineHeight: 20, marginBottom: 16, backgroundColor: C.mint, borderRadius: 8, padding: 13 }, hint: { color: C.muted, fontSize: 12, lineHeight: 19, marginBottom: 20 }, back: { alignSelf: 'center', paddingVertical: 20, paddingHorizontal: 12 }, backText: { color: C.green, fontSize: 13 },
 }); }
 

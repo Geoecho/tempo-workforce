@@ -12,7 +12,7 @@ type Props = {
   date: string; onDateChange: (value: string) => void;
   start: string; onStartChange: (value: string) => void;
   end: string; onEndChange: (value: string) => void;
-  dateLocked?: boolean;
+  dateLocked?: boolean; showDate?: boolean; showTimes?: boolean;
   until?: string; onUntilChange?: (value: string) => void;
 };
 
@@ -30,7 +30,7 @@ const clockValue = (value: string) => {
   return parsed;
 };
 
-export function ShiftDateTimeFields({ date, onDateChange, start, onStartChange, end, onEndChange, dateLocked = false, until, onUntilChange }: Props) {
+export function ShiftDateTimeFields({ date, onDateChange, start, onStartChange, end, onEndChange, dateLocked = false, until, onUntilChange, showDate = true, showTimes = true }: Props) {
   const { colors: C, scheme } = useTheme();
   const { language } = useLanguage();
   const [openKey, setOpenKey] = useState<PickerKey | null>(null);
@@ -72,8 +72,8 @@ export function ShiftDateTimeFields({ date, onDateChange, start, onStartChange, 
     </Pressable>
   </View>;
   return <>
-    {picker('Date', date, 'date')}
-    <View style={{ flexDirection: 'row', gap: 10 }}>{picker('Start', start, 'start')}{picker('End', end, 'end')}</View>
+    {showDate && picker('Date', date, 'date')}
+    {showTimes && <View style={{ flexDirection: 'row', gap: 10 }}>{picker('Start', start, 'start')}{picker('End', end, 'end')}</View>}
     {until && onUntilChange && picker('Repeat until', until, 'until')}
     <Modal visible={openKey !== null} transparent animationType="slide" onRequestClose={() => setOpenKey(null)}>
       <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#0006' }}>

@@ -18,6 +18,9 @@ const migrations = [
   '20261001_messages.sql',
   '20261002_checkin_window.sql',
   '20261003_security_hardening.sql',
+  '20261004_shared_tasks.sql',
+  '20261004_planning_workflows.sql',
+  '20261004_task_completion.sql',
 ];
 test('every migration file is in the application order', () => {
   assert.deepEqual(readdirSync(dir).filter(name => name.endsWith('.sql')).sort(), [...migrations].sort());
@@ -25,6 +28,7 @@ test('every migration file is in the application order', () => {
 
 const SUPABASE_STUB = `
   create role anon nologin;
+  create role service_role nologin;
   create role authenticated nologin;
   create schema auth;
   create table auth.users (id uuid primary key, email text, email_confirmed_at timestamptz);
@@ -270,4 +274,120 @@ test('profile photos: inline images and unchanged values pass, external URLs are
   const current = value(await as(db, ADMIN, 'select public.tempo_snapshot()'));
   await as(db, ADMIN, 'select public.tempo_save_snapshot($1, $2, $3)', [workspaceId, current.version, { ...current.state, workspaceName: 'Renamed' }]);
   await save(undefined);
+});
+
+
+test('shared tasks sync while enforcing worker and workspace boundaries', async () => {
+  const db = await setup();
+  try {
+    const workspaceId = await workspaceWithWorkers(db);
+    await joinWorker(db, workspaceId, WORKER, 'worker@example.com', 'w1');
+    await joinWorker(db, workspaceId, OTHER_WORKER, 'other@example.com', 'w2');
+    await as(db, ADMIN, "select public.tempo_task_change('add', 'task-1', 'w1', 'Check stage cables')");
+    await as(db, ADMIN, "select public.tempo_task_change('add', 'task-2', 'w2', 'Check lights')");
+    assert.equal(value(await as(db, ADMIN, 'select public.tempo_task_list()')).length, 2);
+    const mine = value(await as(db, WORKER, 'select public.tempo_task_list()'));
+    assert.equal(mine.length, 1);
+    assert.equal(mine[0].title, 'Check stage cables');
+    assert.equal(value(await as(db, WORKER, 'select count(*) from public.tempo_tasks')), 1);
+    await assert.rejects(as(db, WORKER, "select public.tempo_task_change('add', 'task-3', 'w1', 'Unauthorized')"), /Admin access/);
+    await assert.rejects(as(db, OTHER_WORKER, "select public.tempo_task_change('complete', 'task-1', null, null, 'data:image/jpeg;base64,aGVsbG8=')"), /assigned worker/);
+    await assert.rejects(as(db, WORKER, "select public.tempo_task_change('complete', 'task-1', null, null, 'file:///device/photo.jpg')"), /Attach a JPEG/);
+    await as(db, WORKER, "select public.tempo_task_change('complete', 'task-1', null, null, 'data:image/jpeg;base64,aGVsbG8=')");
+    assert.ok(value(await as(db, ADMIN, 'select public.tempo_task_list()')).find(task => task.id === 'task-1').doneAt);
+    const alerts = value(await as(db, ADMIN, 'select public.tempo_snapshot()')).notifications;
+    assert.equal(alerts.length, 1);
+    assert.equal(alerts[0].kind, 'task-completed');
+    assert.match(alerts[0].body, /Alex.*Check stage cables/);
+    assert.equal(value(await as(db, OTHER_WORKER, 'select public.tempo_snapshot()')).notifications.filter(item => item.kind === 'task-completed').length, 0);
+    assert.equal(value(await as(db, WORKER, 'select public.tempo_mark_notification_read($1)', [alerts[0].id])), false);
+    await as(db, ADMIN, "select public.tempo_register_push('ExponentPushToken[admin-task]', 'android')");
+    const push = value(await db.query('select public.tempo_claim_push()'));
+    assert.equal(push.length, 1);
+    assert.equal(push[0].token, 'ExponentPushToken[admin-task]');
+    assert.equal(push[0].kind, 'task-completed');
+    await as(db, WORKER, "select public.tempo_task_change('complete', 'task-1', null, null, 'data:image/jpeg;base64,aGVsbG8=')");
+    assert.equal(value(await as(db, ADMIN, 'select public.tempo_snapshot()')).notifications.length, 1);
+    assert.equal(value(await as(db, ADMIN, 'select public.tempo_mark_notification_read($1)', [alerts[0].id])), true);
+
+    await as(db, WORKER, "select public.tempo_task_change('reopen', 'task-1')");
+    assert.equal(value(await as(db, WORKER, 'select public.tempo_task_list()'))[0].doneAt, null);
+    await as(db, WORKER, "select public.tempo_task_change('complete', 'task-1', null, null, 'data:image/jpeg;base64,aGVsbG8=')");
+    assert.equal(value(await as(db, ADMIN, 'select public.tempo_snapshot()')).notifications.length, 1);
+    await assert.rejects(as(db, WORKER, "select public.tempo_task_change('remove', 'task-1')"), /Admin access/);
+    await assert.rejects(as(db, STRANGER, 'select public.tempo_task_list()'), /workspace/);
+    await assert.rejects(as(db, WORKER, "update public.tempo_tasks set title = 'Bypass'"), /permission denied/);
+    await as(db, ADMIN, "select public.tempo_task_change('remove', 'task-1')");
+    assert.deepEqual(value(await as(db, WORKER, 'select public.tempo_task_list()')), []);
+  } finally { await db.close(); }
+});
+
+
+test('planning enforces overlap and availability on server while allowing metadata edits', async () => {
+  const db = await setup(); const id = await workspaceWithWorkers(db);
+  const snap = value(await as(db, ADMIN, 'select public.tempo_snapshot()'));
+  const duplicate = { ...snap.state.shifts[0], id: 'overlap' };
+  await assert.rejects(as(db, ADMIN, 'select public.tempo_save_snapshot($1,$2,$3)', [id,snap.version,{...snap.state,shifts:[...snap.state.shifts,duplicate]}]), /already has/);
+  const tomorrow = value(await db.query("select (now() at time zone 'UTC')::date+1 as day"));
+  const date = new Date(tomorrow).toISOString().slice(0,10);
+  const unavailable = { ...snap.state, workers: snap.state.workers.map(w => ({...w,unavailableDates:[date]})), shifts: [...snap.state.shifts,{...duplicate,date}] };
+  await assert.rejects(as(db, ADMIN, 'select public.tempo_save_snapshot($1,$2,$3)', [id,snap.version,unavailable]), /unavailable/);
+  await db.close();
+});
+
+test('leave reviews are private, require admin notes and block new rosters', async () => {
+ const db=await setup(); const id=await workspaceWithWorkers(db);
+ await joinWorker(db,id,WORKER,'worker@example.com','w1'); await joinWorker(db,id,OTHER_WORKER,'other@example.com','w2');
+ const date=value(await db.query("select ((now() at time zone 'UTC')::date+1)::text"));
+ await as(db,WORKER,'select public.tempo_request_submit($1,$2,$3,$4,$5)', ['leave-1','leave',date,date,'Appointment']);
+ assert.equal(value(await as(db,OTHER_WORKER,'select public.tempo_request_list()')).length,0);
+ await assert.rejects(as(db,WORKER,'select public.tempo_request_review($1,true,$2)',['leave-1','Okay']),/Admin access/);
+ await assert.rejects(as(db,ADMIN,'select public.tempo_request_review($1,true,$2)',['leave-1','']),/review note/);
+ await assert.rejects(as(db,WORKER,'select public.tempo_request_submit($1,$2,$3,$4,$5)', ['duplicate','leave',date,date,'Appointment']),/already awaiting/);
+ await as(db,ADMIN,'select public.tempo_request_review($1,true,$2)',['leave-1','Approved absence']);
+ const snap=value(await as(db,ADMIN,'select public.tempo_snapshot()'));
+ assert.ok(snap.state.workers[0].unavailableDates.includes(date));
+ const blocked={...snap.state,shifts:[...snap.state.shifts,{...snap.state.shifts[0],id:'tomorrow',date,workerIds:['w1']}]};
+ await assert.rejects(as(db,ADMIN,'select public.tempo_save_snapshot($1,$2,$3)',[id,snap.version,blocked]),/unavailable/);
+ await db.close();
+});
+
+test('correction approval retains original punches and revokes previous pay approval', async () => {
+ const db=await setup(); const id=await workspaceWithWorkers(db); await joinWorker(db,id,WORKER,'worker@example.com','w1');
+ const date=value(await db.query("select ((now() at time zone 'UTC')::date-1)::text"));
+ const original=[{id:'original-in',workerId:'w1',shiftId:'s1',type:'in',at:date+'T09:00:00Z',workDate:date,rateAtCheckIn:30},{id:'original-out',workerId:'w1',shiftId:'s1',type:'out',at:date+'T17:00:00Z',workDate:date}];
+ await db.query("update public.tempo_workspaces set state=jsonb_set(jsonb_set(state,'{shifts,0,date}',to_jsonb($2::text)),'{punches}',$3::jsonb) where id=$1",[id,date,JSON.stringify(original)]);
+ await as(db,ADMIN,'select public.tempo_review_time($1,$2,true)',['w1',date]);
+ await as(db,WORKER,'select public.tempo_request_submit($1,$2,$3,$4,$5,$6,$7,$8)',['fix-1','correction',date,date,'Forgot to scan until later','s1','09:00','18:00']);
+ await as(db,ADMIN,'select public.tempo_request_review($1,true,$2)',['fix-1','Site lead confirmed']);
+ const snap=value(await as(db,ADMIN,'select public.tempo_snapshot()'));
+ assert.equal(snap.approvals.length,0); assert.equal(snap.state.punches[1].source,'correction');
+ const audit=value(await db.query('select original_punches from public.tempo_review_audit'));
+ assert.deepEqual(audit,original);
+ await assert.rejects(as(db,WORKER,'select public.tempo_save_snapshot_base($1,$2,$3)',[id,snap.version,snap.state]),/permission denied/);
+ await db.close();
+});
+
+test('push queue isolates tokens, claims once, and removes invalid devices', async () => {
+ const db=await setup(); const id=await workspaceWithWorkers(db); await joinWorker(db,id,WORKER,'worker@example.com','w1');
+ await as(db,WORKER,'select public.tempo_register_push($1,$2)',['ExpoPushToken[test]','android']);
+ await assert.rejects(as(db,WORKER,'select public.tempo_claim_push()'),/permission denied/);
+ await db.query("insert into public.tempo_notifications(workspace_id,worker_id,shift_id,kind,title,body) select $1,'w1','s1','changed','Schedule updated','Update' from generate_series(1,40)",[id]);
+ const jobs=value(await db.query('select public.tempo_claim_push()'));
+ assert.equal(jobs.length,1); assert.ok(jobs.every(job=>job.token==='ExpoPushToken[test]'));
+ assert.equal(value(await db.query('select public.tempo_claim_push()')).length,0);
+ await db.query('select public.tempo_finish_push($1)',[JSON.stringify(jobs.map(job=>({id:job.id,error:'DeviceNotRegistered'})))]);
+ assert.equal(value(await db.query('select count(*)::int from public.tempo_push_devices')),0);
+ await db.close();
+});
+
+test('overnight codes and open attendance remain available across midnight', async () => {
+ const db=await setup(); const id=await workspaceWithWorkers(db); await joinWorker(db,id,WORKER,'worker@example.com','w1');
+ const yesterday=value(await db.query("select ((now() at time zone 'UTC')::date-1)::text"));
+ await db.query("update public.tempo_workspaces set state=jsonb_set(jsonb_set(jsonb_set(state,'{shifts,0,date}',to_jsonb($2::text)),'{shifts,0,start}','\"22:00\"'),' {shifts,0,end}','\"06:00\"') where id=$1",[id,yesterday]);
+ const punch={id:'night-in',shiftId:'s1',workerId:'w1',type:'in',at:yesterday+'T22:00:00Z',workDate:yesterday,rateAtCheckIn:30};
+ await db.query("update public.tempo_workspaces set state=jsonb_set(state,'{punches}',$2::jsonb) where id=$1",[id,JSON.stringify([punch])]);
+ const qr=value(await as(db,ADMIN,'select public.tempo_issue_qr($1)',['s1']));
+ assert.equal(value(await as(db,WORKER,'select public.tempo_record_punch($1)',[qr])).type,'out');
+ await db.close();
 });

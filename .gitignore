@@ -48,3 +48,6 @@ deploy/k8s/overlays/*/secrets.env
 
 # Local export checks (build output)
 .expo-export-check/
+
+# Supabase CLI local cache
+supabase/.temp/

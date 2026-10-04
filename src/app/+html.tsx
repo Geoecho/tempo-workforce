@@ -32,6 +32,15 @@ export default function Root({ children }: PropsWithChildren) {
             touch-action: pan-x pan-y;
           }
           input, textarea, select { font-size: 16px !important; }
+          [data-testid="sidebar-toggle"]:focus:not(:focus-visible) { outline: none; }
+          input[id^="tempo-auth-"] { outline: none; box-shadow: none; }
+          input:-webkit-autofill, textarea:-webkit-autofill {
+            -webkit-box-shadow: 0 0 0 1000px var(--tempo-input-fill, #E9F0E2) inset !important;
+            -webkit-text-fill-color: var(--tempo-input-ink, #202C27) !important;
+            caret-color: var(--tempo-input-ink, #202C27);
+          }
+          input[id^="tempo-auth-"]::-ms-reveal,
+          input[id^="tempo-auth-"]::-ms-clear { display: none; }
         `}} />
         <script dangerouslySetInnerHTML={{ __html: `
           document.addEventListener('touchstart', function(event) {

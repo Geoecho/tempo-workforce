@@ -70,11 +70,16 @@ export default function MarketingPage() {
         <motion.div initial={{ y: reduced ? 0 : 20 }} animate={{ y: 0 }} transition={{ duration: .9, ease: [.22, 1, .36, 1] }}>
           <p className="tempo-eyebrow"><span className="tempo-status-dot" />{t('People. Time. In sync.')}</p>
           <h1>{t('Every shift,')}<br /><span>{t('in sync.')}</span></h1>
-        </motion.div>
-        <motion.div className="tempo-hero-side" initial={{ y: reduced ? 0 : 35 }} animate={{ y: 0 }} transition={{ duration: .95, delay: .12, ease: [.22, 1, .36, 1] }}>
+          <div className="tempo-hero-side">
           <p>{t('Your team has enough to do. Give them one simple place for shifts, hours, and pay.')}</p>
           <button className="tempo-button" onClick={begin}>{t('Start your workspace')}<Icon /></button>
           <button className="tempo-text-link" onClick={() => jump('platform')}>{t('Explore the platform')}<Icon name="down" size={17} /></button>
+          </div>
+        </motion.div>
+        <motion.div className="tempo-hero-preview" initial={{ y: reduced ? 0 : 24 }} animate={{ y: 0 }} transition={{ duration: .7, delay: .1, ease: [.22, 1, .36, 1] }}>
+          <div className="tempo-hero-preview-label"><span className="tempo-status-dot" />{t('Interactive preview')}</div>
+          <SchedulePreview t={t} />
+          <div className="tempo-hero-workflow">{stories.map((story, index) => <button key={story.tab} onClick={() => { setStep(index); jump('platform'); }}><Icon name={story.icon} size={18} /><span>{t(story.tab)}</span><Icon size={14} /></button>)}</div>
         </motion.div>
       </section>
 

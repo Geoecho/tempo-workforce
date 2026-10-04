@@ -1,16 +1,17 @@
-import { getCurrentLanguage } from './i18n';
+import type { SavedSite, ScheduleTemplate } from './planning';
+import { getCurrentLanguage } from './locale.ts';
 
 export type Role = 'admin' | 'worker';
 export const CURRENCIES = ['MKD', 'EUR', 'USD', 'PLN', 'GBP', 'CAD', 'AUD', 'CHF', 'SEK', 'NOK', 'DKK', 'CZK', 'HUF', 'RON', 'UAH', 'AED', 'INR', 'SGD', 'JPY', 'BRL', 'MXN', 'ZAR'] as const;
 export type Currency = typeof CURRENCIES[number];
-export type Worker = { id: string; name: string; initials: string; role: string; team: string; color: string; phone?: string; photoUri?: string; hourlyRate: number; archived?: boolean };
-export type Shift = { id: string; title: string; site: string; location: string; latitude?: number; longitude?: number; seriesId?: string; date: string; start: string; end: string; team: string; workerIds: string[]; status: 'upcoming' | 'active' | 'completed'; archived?: boolean };
-export type Punch = { id: string; shiftId: string; workerId: string; type: 'in' | 'out'; at: string; source: 'qr' | 'demo'; rateAtCheckIn?: number; workDate?: string };
+export type Worker = { id: string; name: string; initials: string; role: string; team: string; color: string; phone?: string; photoUri?: string; hourlyRate: number; payConfig?: PayConfig; availableDays?: number[]; unavailableDates?: string[]; archived?: boolean };
+export type Shift = { id: string; title: string; site: string; location: string; latitude?: number; longitude?: number; seriesId?: string; slotId?: string; requiredWorkers?: number; date: string; start: string; end: string; team: string; workerIds: string[]; status: 'upcoming' | 'active' | 'completed'; archived?: boolean };
+export type Punch = { id: string; shiftId: string; workerId: string; type: 'in' | 'out'; at: string; source: 'qr' | 'demo' | 'correction'; rateAtCheckIn?: number; workDate?: string };
 export type BreakEvent = { id: string; shiftId: string; workerId: string; type: 'start' | 'end'; at: string; workDate: string };
-export type ShiftNotification = { id: string; workerId: string; shiftId: string; kind: 'assigned' | 'changed' | 'removed' | 'clocked-in'; title: string; body: string; createdAt: string; readAt: string | null };
+export type ShiftNotification = { id: string; workerId: string; shiftId: string; kind: 'assigned' | 'changed' | 'removed' | 'clocked-in' | 'task-completed'; title: string; body: string; createdAt: string; readAt: string | null };
 export type TimeApproval = { workerId: string; date: string; approvedBy: string; approvedAt: string };
 export type Message = { id: string; from: 'admin' | string; to: string | 'all'; body: string; createdAt: string; readAt: string | null };
-export type State = { role: Role; selectedWorkerId: string; currency: Currency; workspaceName?: string; teams?: string[]; workers: Worker[]; shifts: Shift[]; punches: Punch[]; messages?: Message[] };
+export type State = { role: Role; selectedWorkerId: string; currency: Currency; workspaceName?: string; demoTaskAlerts?: ShiftNotification[]; sites?: SavedSite[]; templates?: ScheduleTemplate[]; teams?: string[]; workers: Worker[]; shifts: Shift[]; punches: Punch[]; messages?: Message[] };
 export const teamNames = (state: Pick<State, 'teams' | 'workers'>): string[] =>
   [...new Set([...(state.teams ?? []), ...state.workers.map(worker => worker.team)].filter(Boolean))];
 
@@ -44,6 +45,13 @@ export const shiftHasEnded = (shift: Shift, now = Date.now()) => {
   const end = new Date(`${shift.date}T${shift.end}:00`);
   if (shift.end <= shift.start) end.setDate(end.getDate() + 1);
   return end.getTime() < now;
+};
+export const clockShiftAvailable = (shift: Shift, punches: Punch[], now = Date.now(), workerId?: string) => {
+  if (shift.archived) return false;
+  if (shift.date === localDate(new Date(now))) return true;
+  const previous = new Date(now); previous.setDate(previous.getDate() - 1);
+  return shift.end < shift.start && shift.date === localDate(previous) && !shiftHasEnded(shift, now)
+    || shiftHasOpenPunch(shift.id, workerId ? punches.filter(punch => punch.workerId === workerId) : punches);
 };
 // Arriving more than the grace period after the shift start counts as late. Derived from the first check-in, so it is always on record.
 export const LATE_GRACE_MINUTES = 5;
@@ -101,7 +109,7 @@ export const formatMoney = (cents: number, currency: Currency) => new Intl.Numbe
 
 // Pay models. Hourly is the default; "event" pays a flat amount per shift attended; "fixed" is a monthly salary (accrues as a daily share on days worked).
 export type PayType = 'hourly' | 'event' | 'fixed';
-export type PayConfig = { type: PayType; amount: number };
+export type PayConfig = { type: PayType; amount: number; monthlyHours?: number };
 let payWorkers: Record<string, PayConfig> = {};
 let payShifts: Record<string, number> = {};
 export const setPayRegistry = (workersCfg: Record<string, PayConfig>, shiftCfg: Record<string, number>) => { payWorkers = workersCfg; payShifts = shiftCfg; };
@@ -141,10 +149,6 @@ export function paySummary(punches: Punch[], worker: Worker, date: string, now =
   if (cfg.type === 'event') {
     const shiftIds = [...new Set(sessions.map(x => x.shiftId))];
     earningsCents = shiftIds.reduce((sum, id) => sum + Math.round((shiftPayOf(id) ?? cfg.amount) * 100), 0);
-  } else if (cfg.type === 'fixed') {
-    const d = new Date(`${date}T12:00:00`);
-    const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-    earningsCents = sessions.length ? Math.round(cfg.amount * 100 / daysInMonth) : 0;
   }
   return { actualMinutes: Math.floor(actualMs / 60_000), payableMinutes: Math.floor(paidMs / 60_000), excessMinutes: Math.floor(Math.max(0, actualMs - paidMs) / 60_000), actualSeconds: Math.floor(actualMs / 1000), payableSeconds: Math.floor(paidMs / 1000), earningsCents };
 }

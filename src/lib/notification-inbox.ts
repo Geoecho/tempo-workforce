@@ -38,10 +38,12 @@ export function useNotificationInbox(scope: string, items: ShiftNotification[]) 
     return () => { active = false; };
   }, [scope]);
 
-  const update = (id: string, mark: Marks[string]) => {
+  const update = (ids: string[], mark: Marks[string]) => {
     const task = queue.current.catch(() => {}).then(async () => {
       if (current.current.scope !== scope) throw new Error('Notifications are still loading. Please try again.');
-      const next = { scope, marks: { ...current.current.marks, [id]: { ...current.current.marks[id], ...mark } } };
+      const marks = { ...current.current.marks };
+      for (const id of ids) marks[id] = { ...marks[id], ...mark };
+      const next = { scope, marks };
       await AsyncStorage.setItem(`tempo-inbox-v1:${scope}`, JSON.stringify(next.marks));
       if (current.current.scope === scope) { current.current = next; setStored(next); }
     });
@@ -51,7 +53,8 @@ export function useNotificationInbox(scope: string, items: ShiftNotification[]) 
   return {
     notifications: stored.scope !== scope ? [] : items.filter(item => !stored.marks[item.id]?.dismissed)
       .map(item => ({ ...item, readAt: stored.marks[item.id]?.readAt ?? item.readAt })),
-    dismissNotification: (id: string) => update(id, { dismissed: true }),
-    markLocalNotificationRead: (id: string) => update(id, { readAt: new Date().toISOString() }),
+    dismissNotification: (id: string) => update([id], { dismissed: true }),
+    markLocalNotificationRead: (id: string) => update([id], { readAt: new Date().toISOString() }),
+    markLocalNotificationsRead: (ids: string[]) => update(ids, { readAt: new Date().toISOString() }),
   };
 }

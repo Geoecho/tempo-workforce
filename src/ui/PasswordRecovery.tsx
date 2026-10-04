@@ -3,7 +3,10 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Platform } from 'react-native';
 import { AuthLayout, useAuthStyles } from './AuthLayout';
 import { Pressable } from './LocalizedPressable';
-import { Text, TextInput } from './LocalizedText';
+import { Text } from './LocalizedText';
+import { AuthField } from './AuthField';
+import { PasswordStrength } from './PasswordStrength';
+import { AuthMotion } from './AuthMotion';
 import { supabase } from '../lib/supabase';
 import { useTheme } from './theme';
 
@@ -28,9 +31,11 @@ export function PasswordRecovery({ email, onComplete }: { email: string; onCompl
     finally { setBusy(false); }
   };
   return <AuthLayout title="Set a new password" description="Choose a secure password for your account.">
+    <AuthMotion delay={90}>
     {!!email && <Text style={s.hint}>{email}</Text>}
-    <Text style={s.label}>New password</Text><TextInput accessibilityLabel="New password" autoCapitalize="none" autoComplete="new-password" secureTextEntry value={password} onChangeText={setPassword} placeholder="At least 8 characters" style={s.input} />
-    <Text style={s.label}>Confirm password</Text><TextInput accessibilityLabel="Confirm password" autoCapitalize="none" autoComplete="new-password" secureTextEntry value={confirm} onChangeText={setConfirm} onSubmitEditing={() => void submit()} placeholder="Repeat your new password" style={s.input} />
+    <Text style={s.label}>New password</Text><AuthField password accessibilityLabel="New password" autoCapitalize="none" autoCorrect={false} autoComplete="new-password" value={password} onChangeText={setPassword} editable={!busy} placeholder="At least 8 characters" /><PasswordStrength password={password} />
+    <Text style={s.label}>Confirm password</Text><AuthField password accessibilityLabel="Confirm password" autoCapitalize="none" autoCorrect={false} autoComplete="new-password" value={confirm} onChangeText={setConfirm} editable={!busy} onSubmitEditing={() => void submit()} placeholder="Repeat your new password" />
     {!!message && <Text accessibilityRole="alert" style={s.error}>{message}</Text>}<Pressable accessibilityRole="button" onPress={() => void submit()} disabled={busy} style={[s.submit, busy && { opacity: .6 }]}>{busy ? <ActivityIndicator color={C.onGreen} /> : <><Text style={s.submitText}>Save password</Text><ArrowRight size={18} color={C.onGreen} /></>}</Pressable>
+    </AuthMotion>
   </AuthLayout>;
 }

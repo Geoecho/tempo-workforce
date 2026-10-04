@@ -1,8 +1,11 @@
+import type { SavedSite, ScheduleTemplate, EditScope, ShiftChanges } from './planning';
 import { createContext } from 'react';
 import type { BreakEvent, Currency, Message, PaySummary, Punch, Shift, ShiftNotification, State, TimeApproval, Worker } from './data';
 
 export type Result = { ok: boolean; message: string; type?: 'in' | 'out'; pay?: PaySummary };
 export type Store = State & {
+  recordLocalTaskCompletion?: (id: string, workerId: string, title: string) => void;
+  applyLocalCorrection: (workerId: string, shiftId: string, start: string, end: string) => Result;
   ready: boolean;
   online: boolean;
   syncError: string | null;
@@ -15,23 +18,33 @@ export type Store = State & {
   markMessageRead: (id: string) => Promise<void>;
   setRole: (role: State['role']) => void;
   setSelectedWorker: (id: string) => void;
+  saveSite: (site: SavedSite) => Promise<Result> | Result;
+  saveTemplate: (template: ScheduleTemplate) => Promise<Result> | Result;
+  editShiftSeries: (id: string, changes: ShiftChanges, scope: EditScope) => Promise<Result> | Result;
+  syncStatus: 'saved' | 'saving' | 'error';
+  retrySync: () => Promise<void>;
+  refreshSharedData: () => Promise<void>;
   addTeam: (name: string) => void;
+  renameTeam: (oldName: string, newName: string) => void;
+  removeTeam: (name: string, destination: string) => void;
   addWorker: (worker: Omit<Worker, 'id' | 'initials' | 'color'>) => void;
-  updateWorker: (id: string, changes: Partial<Pick<Worker, 'name' | 'role' | 'team' | 'phone' | 'photoUri' | 'hourlyRate'>>) => void;
+  updateWorker: (id: string, changes: Partial<Pick<Worker, 'name' | 'role' | 'team' | 'phone' | 'photoUri' | 'hourlyRate' | 'payConfig' | 'availableDays' | 'unavailableDates'>>) => void;
   removeWorker: (id: string) => void;
   restoreWorker: (id: string) => void;
   setCurrency: (currency: Currency) => void;
   setWorkspaceName: (name: string) => void;
   addShift: (shift: Omit<Shift, 'id' | 'status'>) => void;
-  addShifts: (shifts: Omit<Shift, 'id' | 'status'>[]) => void;
+  addShifts: (shifts: Omit<Shift, 'id' | 'status'>[]) => Promise<Result> | Result;
   updateShift: (id: string, changes: Partial<Pick<Shift, 'title' | 'site' | 'location' | 'latitude' | 'longitude' | 'date' | 'start' | 'end' | 'team' | 'workerIds'>>) => void;
   removeShift: (id: string) => void;
+  removeShifts: (ids: string[]) => void;
   restoreShift: (id: string) => void;
   scan: (payload: string, source?: Punch['source']) => Result | Promise<Result>;
   toggleBreak: (shiftId: string) => Promise<Result>;
   issueQr: (shiftId: string) => Promise<string>;
   dismissNotification: (id: string) => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
+  markNotificationsRead: (ids: string[]) => Promise<void>;
   reviewTime: (workerId: string, date: string, approve: boolean) => Promise<Result>;
   reset: () => void;
   inviteWorker: (workerId: string, email: string) => Promise<Result>;

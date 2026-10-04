@@ -1,3 +1,7 @@
+import { unregisterPushDevice } from './push-registration';
+import { editSeries, seriesTargets, validateRoster, SavedSite, ScheduleTemplate, EditScope, ShiftChanges } from './planning';
+import { renameTeamInState, removeTeamInState } from './team-rename';
+import { archiveShiftGroup, restoreShiftRecord } from './shift-groups';
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
@@ -44,6 +48,8 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   const [mfaRequired, setMfaRequired] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<'saved' | 'saving' | 'error'>('saved');
+  const failedUpdate = useRef<((current: State) => State) | null>(null);
   const [workspaceId, setWorkspaceId] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const stateRef = useRef(state);
@@ -54,7 +60,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
 
   const userId = session?.user.id;
   const accountIntent = session?.user.user_metadata.tempo_intent;
-  const inbox = useNotificationInbox(`${userId ?? 'signed-out'}:${workspaceId}:${state.role}`, state.role === 'admin' ? clockInNotifications(state) : notifications);
+  const inbox = useNotificationInbox(`${userId ?? 'signed-out'}:${workspaceId}:${state.role}`, state.role === 'admin' ? [...clockInNotifications(state), ...notifications] : notifications);
 
   useEffect(() => {
     client.auth.getSession().then(({ data }) => setSession(data.session)).finally(() => setAuthReady(true));
@@ -154,16 +160,17 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   }, [ready, workspaceId]);
 
   const commit = (update: (current: State) => State) => {
-    if (stateRef.current.role !== 'admin' || !workspaceId) return;
+    if (stateRef.current.role !== 'admin' || !workspaceId) return Promise.resolve({ ok: false, message: 'Admin access required.' });
     const next = update(stateRef.current);
-    if (next === stateRef.current) return;
+    if (next === stateRef.current) return Promise.resolve({ ok: true, message: 'No changes needed.' });
     stateRef.current = next;
     setState(next);
     const generation = generationRef.current;
     pendingRef.current++;
-    queueRef.current = queueRef.current
+    setSyncStatus('saving');
+    const operation = queueRef.current
       .then(async () => {
-        if (generation !== generationRef.current) return;
+        if (generation !== generationRef.current) return { ok: false, message: 'A previous save failed. Try again.' };
         const { data, error } = await client.rpc('tempo_save_snapshot', {
           p_workspace_id: workspaceId,
           p_expected_version: versionRef.current,
@@ -172,15 +179,26 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
         if (error) throw error;
         versionRef.current = Number(data);
         setSyncError(null);
+        failedUpdate.current = null;
+        return { ok: true, message: 'Changes saved.' };
       })
       .catch(async error => {
         generationRef.current++;
-        setSyncError(userMessage(error, 'Could not save shared data.'));
+        failedUpdate.current = update;
+        setSyncStatus('error');
+        const message = userMessage(error, 'Could not save shared data.');
+        setSyncError(message);
         try { await loadSnapshot(); } catch { /* Keep the original save error visible. */ }
+        return { ok: false, message };
       })
-      .finally(() => { pendingRef.current--; });
+      .finally(() => { pendingRef.current--; if (!pendingRef.current) setSyncStatus(failedUpdate.current ? 'error' : 'saved'); });
+    queueRef.current = operation.then(() => {});
+    return operation;
   };
+  const retrySync = async () => { const update = failedUpdate.current; if (!update) return; try { await loadSnapshot(); await commit(update); } catch { setSyncError('Could not reconnect. Try again.'); } };
 
+  const removeTeam = (name: string, destination: string) => commit(s => removeTeamInState(s, name, destination));
+  const renameTeam = (oldName: string, newName: string) => commit(s => renameTeamInState(s, oldName, newName));
   const addTeam = (rawName: string) => commit(s => {
     const name = rawName.trim();
     return !name || teamNames(s).some(team => team.toLowerCase() === name.toLowerCase())
@@ -190,7 +208,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
     const id = uid();
     return { ...s, workers: [...s.workers, { ...worker, id, initials: worker.name.split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase(), color: '#DDEBE5' }], selectedWorkerId: s.selectedWorkerId || id };
   });
-  const updateWorker = (id: string, changes: Partial<Pick<Worker, 'name' | 'role' | 'team' | 'phone' | 'photoUri' | 'hourlyRate'>>) =>
+  const updateWorker = (id: string, changes: Partial<Pick<Worker, 'name' | 'role' | 'team' | 'phone' | 'photoUri' | 'hourlyRate' | 'payConfig' | 'availableDays' | 'unavailableDates'>>) =>
     commit(s => ({ ...s, workers: s.workers.map(w => w.id === id ? { ...w, ...changes, initials: changes.name ? changes.name.split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase() : w.initials } : w) }));
   const removeWorker = (id: string) => commit(s => {
     if (s.shifts.some(shift => [...s.punches].reverse().find(p => p.workerId === id && p.shiftId === shift.id)?.type === 'in')) return s;
@@ -201,16 +219,31 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   const restoreWorker = (id: string) => commit(s => ({ ...s, workers: s.workers.map(w => w.id === id ? { ...w, archived: false } : w) }));
   const setCurrency = (currency: Currency) => commit(s => s.punches.length ? s : ({ ...s, currency }));
   const setWorkspaceName = (rawName: string) => commit(s => rawName.trim() ? { ...s, workspaceName: rawName.trim() } : s);
+  const saveSite = (site: SavedSite) => commit(s => ({ ...s, sites: [...(s.sites ?? []).filter(item => item.id !== site.id && item.name.toLowerCase() !== site.name.toLowerCase()), site] }));
+  const saveTemplate = (template: ScheduleTemplate) => commit(s => ({ ...s, templates: [...(s.templates ?? []).filter(item => item.id !== template.id && item.name.toLowerCase() !== template.name.toLowerCase()), template] }));
+  const editShiftSeries = (id: string, changes: ShiftChanges, scope: EditScope) => {
+    const current = stateRef.current;
+    const next = editSeries(current, id, changes, scope);
+    const source = current.shifts.find(shift => shift.id === id);
+    const ids = new Set(source ? seriesTargets(current, source, scope).map(shift => shift.id) : []);
+    const error = validateRoster(next.shifts.filter(shift => ids.has(shift.id)), current.workers, current.shifts);
+    if (error) return { ok: false, message: error };
+    return commit(state => editSeries(state, id, changes, scope));
+  };
   const addShift = (shift: Omit<Shift, 'id' | 'status'>) => commit(s => ({ ...s, shifts: [{ ...shift, id: uid(), status: 'upcoming' }, ...s.shifts] }));
-  const addShifts = (shifts: Omit<Shift, 'id' | 'status'>[]) => commit(s => ({ ...s, shifts: [...shifts.map(shift => ({ ...shift, id: uid(), status: 'upcoming' as const })), ...s.shifts] }));
+  const addShifts = (drafts: Omit<Shift, 'id' | 'status'>[]) => {
+    const current = stateRef.current;
+    const added = drafts.map(shift => ({ ...shift, id: uid(), status: 'upcoming' as const }));
+    const error = validateRoster(added, current.workers, current.shifts);
+    if (error) return { ok: false, message: error };
+    return commit(s => ({ ...s, shifts: [...added, ...s.shifts] }));
+  };
   const updateShift = (id: string, changes: Partial<Pick<Shift, 'title' | 'site' | 'location' | 'latitude' | 'longitude' | 'date' | 'start' | 'end' | 'team' | 'workerIds'>>) => commit(s => ({
     ...s, shifts: s.shifts.map(shift => shift.id !== id ? shift : { ...shift, ...changes, ...(s.punches.some(p => p.shiftId === id) ? { date: shift.date, workerIds: shift.workerIds } : {}) }),
   }));
-  const removeShift = (id: string) => commit(s => {
-    if (s.workers.some(w => [...s.punches].reverse().find(p => p.workerId === w.id && p.shiftId === id)?.type === 'in')) return s;
-    return { ...s, shifts: s.punches.some(p => p.shiftId === id) ? s.shifts.map(shift => shift.id === id ? { ...shift, archived: true } : shift) : s.shifts.filter(shift => shift.id !== id) };
-  });
-  const restoreShift = (id: string) => commit(s => ({ ...s, shifts: s.shifts.map(shift => shift.id === id ? { ...shift, archived: false } : shift) }));
+  const removeShift = (id: string) => commit(s => archiveShiftGroup(s, [id]));
+  const removeShifts = (ids: string[]) => commit(s => archiveShiftGroup(s, ids));
+  const restoreShift = (id: string) => commit(s => restoreShiftRecord(s, id));
 
   const scan = async (payload: string, source: Punch['source'] = 'qr'): Promise<Result> => {
     // Check-in closes when the shift's end time passes (the database enforces this too once migrated).
@@ -234,7 +267,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
         const shift = last ? fresh!.shifts.find(x => x.id === last.shiftId) : undefined;
         if (shift) message = message.replace(/\.?$/, '.') + lateNote(lateMinutes(shift, fresh!.punches, worker.id));
       }
-      return { ...result, message, ...(worker && result.type === 'out' ? { pay: paySummary(fresh!.punches, worker, today()) } : {}) };
+      return { ...result, message, ...(worker && result.type === 'out' ? { pay: paySummary(fresh!.punches, worker, fresh!.punches.filter(p => p.workerId === worker.id && p.type === 'out').at(-1)?.workDate ?? today()) } : {}) };
     } catch {
       return data as Result;
     }
@@ -252,10 +285,23 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
     return String(data);
   }, []);
   const markNotificationRead = async (id: string): Promise<void> => {
-    if (state.role === 'admin') return inbox.markLocalNotificationRead(id);
+    if (state.role === 'admin' && id.startsWith('clock-in:')) return inbox.markLocalNotificationRead(id);
     const { error } = await client.rpc('tempo_mark_notification_read', { p_id: id });
     if (error) throw error;
     setNotifications(current => current.map(item => item.id === id ? { ...item, readAt: new Date().toISOString() } : item));
+  };
+  const markNotificationsRead = async (ids: string[]): Promise<void> => {
+    const unique = [...new Set(ids)].filter(id => !id.startsWith('clock-in:'));
+    if (state.role === 'admin') await inbox.markLocalNotificationsRead(ids.filter(id => id.startsWith('clock-in:')));
+    const results = await Promise.allSettled(unique.map(async id => {
+      const { error } = await client.rpc('tempo_mark_notification_read', { p_id: id });
+      if (error) throw error;
+      return id;
+    }));
+    const saved = new Set(results.flatMap(result => result.status === 'fulfilled' ? [result.value] : []));
+    const readAt = new Date().toISOString();
+    setNotifications(current => current.map(item => saved.has(item.id) ? { ...item, readAt: item.readAt ?? readAt } : item));
+    if (results.some(result => result.status === 'rejected')) throw new Error('Some notifications could not be marked as read.');
   };
   const reviewTime = async (workerId: string, date: string, approve: boolean): Promise<Result> => {
     const { error } = await client.rpc('tempo_review_time', { p_worker_id: workerId, p_date: date, p_approve: approve });
@@ -290,10 +336,10 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   </View>;
 
   return <Context.Provider value={{
-    ...state, ready, online: true, syncError, accountEmail: session.user.email ?? null, notifications: inbox.notifications, dismissNotification: inbox.dismissNotification, approvals, breaks, messages,
-    setRole: () => {}, setSelectedWorker: () => {}, addTeam,
+    ...state, applyLocalCorrection: () => ({ ok: false, message: 'Use the request review service.' }), ready, online: true, syncStatus, retrySync, refreshSharedData: async () => { await queueRef.current; await loadSnapshot(); }, syncError, accountEmail: session.user.email ?? null, notifications: inbox.notifications, dismissNotification: inbox.dismissNotification, approvals, breaks, messages,
+    setRole: () => {}, setSelectedWorker: () => {}, addTeam, renameTeam, removeTeam,
     addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, setWorkspaceName,
-    addShift, addShifts, updateShift, removeShift, restoreShift, scan, toggleBreak, issueQr, markNotificationRead, reviewTime,
+    saveSite, saveTemplate, editShiftSeries, addShift, addShifts, updateShift, removeShift, removeShifts, restoreShift, scan, toggleBreak, issueQr, markNotificationRead, markNotificationsRead, reviewTime,
     sendMessage: async (to, body) => {
       const { error } = await client.rpc('tempo_send_message', { p_to: to, p_body: body });
       if (error) return { ok: false, message: userMessage(error, 'Could not send the message. Try again.') };
@@ -307,6 +353,6 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
       setMessages(current => current.map(m => m.id === id ? { ...m, readAt: new Date().toISOString() } : m));
     },
     reset: () => {},
-    inviteWorker, signOut: async () => { await client.auth.signOut(); },
+    inviteWorker, signOut: async () => { await unregisterPushDevice(); await client.auth.signOut(); },
   }}>{children}</Context.Provider>;
 }
