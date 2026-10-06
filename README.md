@@ -2,6 +2,12 @@
 
 Tempo schedules crews at sites, records QR based check-ins, and gives admins a monthly view of estimated pay. It runs as an Expo app on iOS and Android and as a responsive web app at [tempo-workforce.vercel.app](https://tempo-workforce.vercel.app/).
 
+## Project review
+
+For a decision-focused inventory of the implemented and partial features, technology map, local completeness checks, Supabase Free-plan capacity, archive approach, and keep/revise/add/defer recommendations, see the **[Project scope and capacity audit](docs/PROJECT_AUDIT.md)**. The separate [ship-readiness review](docs/SHIP_READINESS.md) tracks release, privacy, and security blockers.
+
+For a code-focused proposal to replace repeated full-workspace polling with screen-scoped loading, targeted writes, paginated history, and smaller change-driven refreshes, see the **[Data-loading and sync optimization proposal](docs/OPTIMIZATION_PROPOSAL.md)**.
+
 ## How work moves through Tempo
 
 1. An admin creates a workspace, then creates teams and worker profiles.
