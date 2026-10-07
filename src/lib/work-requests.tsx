@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { AppState } from 'react-native';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { AppState, Platform } from 'react-native';
 import { useStore } from './store';
 import { supabase } from './supabase';
 import { localDate, uid } from './data';
@@ -10,28 +10,51 @@ type Draft = Omit<WorkRequest, 'id' | 'workerId' | 'status' | 'createdAt'>;
 type Requests = { items: WorkRequest[]; error: string; submit: (draft: Draft) => Promise<void>; review: (id: string, approve: boolean, note: string) => Promise<void> };
 const Context = createContext<Requests | null>(null);
 const safeError = (error: { code?: string; message?: string }) => error.code === 'P0001' || error.code?.startsWith('PT') ? error.message ?? 'Could not save the request.' : 'Requests could not sync. Check your connection or ask an admin to apply the workflow database update.';
+const isForeground = () => Platform.OS === 'web'
+  ? typeof document === 'undefined' || document.visibilityState === 'visible'
+  : AppState.currentState === 'active';
 export function WorkRequestsProvider({ children }: { children: React.ReactNode }) {
   const { ready, online, accountEmail, selectedWorkerId, role, workers, updateWorker, applyLocalCorrection, refreshSharedData } = useStore();
   const [items, setItems] = useState<WorkRequest[]>([]);
   const [error, setError] = useState('');
   const [source, setSource] = useState('demo');
   const [localReady, setLocalReady] = useState(false);
+  const revisionRef = useRef<number | null>(null);
   const refresh = useCallback(async () => {
     if (!ready || !online || !supabase) return;
     const { data, error: failure } = await supabase.rpc('tempo_request_list');
-    if (failure) { setError(safeError(failure)); return; }
+    if (failure) { setError(safeError(failure)); return false; }
     setSource(accountEmail ?? '');
     setItems(current => JSON.stringify(current) === JSON.stringify(data) ? current : data ?? []); setError('');
+    return true;
   }, [ready, online, accountEmail]);
+  const checkRevision = useCallback(async () => {
+    if (!ready || !online || !supabase) return;
+    const { data, error } = await supabase.rpc('tempo_sync_versions');
+    if (error || !data) { await refresh(); return; }
+    const revision = Number(data.sections?.requests ?? 0);
+    if (revision !== revisionRef.current && await refresh()) revisionRef.current = revision;
+  }, [ready, online, refresh]);
   useEffect(() => {
     if (!ready) return;
     let active = true;
     if (!online) { void AsyncStorage.getItem('tempo-demo-requests-v1').then(raw => { if (active) { setItems(raw ? JSON.parse(raw) : []); setLocalReady(true); } }).catch(() => { if (active) setLocalReady(true); }); return () => { active = false; }; }
-    const first = setTimeout(() => void refresh(), 0);
-    const timer = setInterval(() => { if (AppState.currentState === 'active') void refresh(); }, 20000);
-    const listener = AppState.addEventListener('change', state => { if (state === 'active') void refresh(); });
-    return () => { clearTimeout(first); clearInterval(timer); listener.remove(); };
-  }, [ready, online, accountEmail, refresh]);
+    if (!supabase) return;
+    const client = supabase;
+    revisionRef.current = null;
+    const first = setTimeout(() => void checkRevision(), 0);
+    const timer = setInterval(() => { if (isForeground()) void checkRevision(); }, 60000);
+    const listener = AppState.addEventListener('change', state => { if (state === 'active') void checkRevision(); });
+    const onVisible = () => { if (isForeground()) void checkRevision(); };
+    if (Platform.OS === 'web' && typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
+    let changeTimer: ReturnType<typeof setTimeout> | undefined;
+    const channel = client.channel(`requests:${accountEmail}`).on('postgres_changes', { event: '*', schema: 'public', table: 'tempo_sync_revisions' }, payload => {
+      if ((payload.new as { section?: string }).section !== 'requests') return;
+      if (changeTimer) clearTimeout(changeTimer);
+      changeTimer = setTimeout(() => { void checkRevision(); }, 250);
+    }).subscribe();
+    return () => { clearTimeout(first); clearInterval(timer); if (changeTimer) clearTimeout(changeTimer); listener.remove(); if (Platform.OS === 'web' && typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible); void client.removeChannel(channel); };
+  }, [ready, online, accountEmail, checkRevision]);
   useEffect(() => { if (!online && localReady) void AsyncStorage.setItem('tempo-demo-requests-v1', JSON.stringify(items)); }, [items, online, localReady]);
   const submit = async (draft: Draft) => {
     if (role !== 'worker') throw new Error('Worker access required.');
@@ -41,7 +64,7 @@ export function WorkRequestsProvider({ children }: { children: React.ReactNode }
     const id = uid();
     if (online && supabase) {
       const { error: failure } = await supabase.rpc('tempo_request_submit', { p_id: id, p_kind: draft.kind, p_from: draft.fromDate, p_until: draft.toDate, p_reason: draft.reason.trim(), p_shift_id: draft.shiftId ?? null, p_in: draft.inTime ?? null, p_out: draft.outTime ?? null });
-      if (failure) throw new Error(safeError(failure)); await refresh(); return;
+      if (failure) throw new Error(safeError(failure)); await checkRevision(); return;
     }
     setItems(current => [{ ...draft, id, workerId: selectedWorkerId, status: 'pending', reason: draft.reason.trim(), createdAt: new Date().toISOString() }, ...current]);
   };
@@ -50,7 +73,7 @@ export function WorkRequestsProvider({ children }: { children: React.ReactNode }
     if (!note.trim()) throw new Error('Add a review note.');
     if (online && supabase) {
       const { error: failure } = await supabase.rpc('tempo_request_review', { p_id: id, p_approve: approve, p_note: note.trim() });
-      if (failure) throw new Error(safeError(failure)); await Promise.all([refresh(), refreshSharedData()]); return;
+      if (failure) throw new Error(safeError(failure)); await Promise.all([checkRevision(), refreshSharedData()]); return;
     }
     const request = items.find(item => item.id === id && item.status === 'pending');
     if (!request) throw new Error('This request is no longer awaiting review.');

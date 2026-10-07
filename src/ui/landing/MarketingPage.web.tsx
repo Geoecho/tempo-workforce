@@ -67,24 +67,23 @@ export default function MarketingPage() {
 
     <main>
       <section className="tempo-hero tempo-container">
-        <motion.div initial={{ y: reduced ? 0 : 20 }} animate={{ y: 0 }} transition={{ duration: .9, ease: [.22, 1, .36, 1] }}>
+        <motion.div className="tempo-hero-copy" initial={{ y: reduced ? 0 : 20 }} animate={{ y: 0 }} transition={{ duration: .9, ease: [.22, 1, .36, 1] }}>
           <p className="tempo-eyebrow"><span className="tempo-status-dot" />{t('People. Time. In sync.')}</p>
-          <h1>{t('Every shift,')}<br /><span>{t('in sync.')}</span></h1>
+          <h1><span>{t('Every shift,')}</span><span>{t('in sync.')}</span></h1>
           <div className="tempo-hero-side">
-          <p>{t('Your team has enough to do. Give them one simple place for shifts, hours, and pay.')}</p>
-          <button className="tempo-button" onClick={begin}>{t('Start your workspace')}<Icon /></button>
-          <button className="tempo-text-link" onClick={() => jump('platform')}>{t('Explore the platform')}<Icon name="down" size={17} /></button>
+            <p>{t('Your team has enough to do. Give them one simple place for shifts, hours, and pay.')}</p>
+            <div className="tempo-hero-actions"><button className="tempo-button" onClick={begin}>{t('Start your workspace')}<Icon /></button><button className="tempo-text-link" onClick={() => jump('platform')}>{t('Explore the platform')}<Icon name="down" size={17} /></button></div>
           </div>
         </motion.div>
         <motion.div className="tempo-hero-preview" initial={{ y: reduced ? 0 : 24 }} animate={{ y: 0 }} transition={{ duration: .7, delay: .1, ease: [.22, 1, .36, 1] }}>
-          <div className="tempo-hero-preview-label"><span className="tempo-status-dot" />{t('Interactive preview')}</div>
+          <div className="tempo-hero-preview-label"><span className="tempo-status-dot" />{t('Your week at a glance')}</div>
           <SchedulePreview t={t} />
           <div className="tempo-hero-workflow">{stories.map((story, index) => <button key={story.tab} onClick={() => { setStep(index); jump('platform'); }}><Icon name={story.icon} size={18} /><span>{t(story.tab)}</span><Icon size={14} /></button>)}</div>
         </motion.div>
       </section>
 
-      <section className="tempo-theatre tempo-container" id="platform" aria-label={t('Interactive preview')}>
-        <div className="tempo-stage-top"><span><span className="tempo-status-dot" />{t('Everything moves together.')}</span><span className="tempo-demo-label">{t('Interactive preview')}</span></div>
+      <section className="tempo-theatre tempo-container" id="platform" aria-label={t('The platform')}>
+        <div className="tempo-stage-top"><span><span className="tempo-status-dot" />{t('Everything moves together.')}</span><span className="tempo-demo-label">{String(step + 1).padStart(2, '0')} / 03</span></div>
         <div className="tempo-stage"><div className="tempo-stage-copy">
           <div className="tempo-tabs" role="tablist" aria-label={t('Try the workflow')}>{stories.map((story, index) => <button key={story.tab} id={`tempo-tab-${index}`} aria-controls="tempo-story-panel" role="tab" aria-selected={step === index} tabIndex={step === index ? 0 : -1} onKeyDown={event => { if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return; event.preventDefault(); const next = event.key === 'Home' ? 0 : event.key === 'End' ? 2 : (step + (event.key === 'ArrowRight' ? 1 : 2)) % 3; setStep(next); document.getElementById(`tempo-tab-${next}`)?.focus(); }} onClick={() => setStep(index)}>{step === index && <motion.span layoutId="tempo-active-tab" className="tempo-tab-active" transition={{ type: 'spring', stiffness: 360, damping: 34 }} />}<span>{t(story.tab)}</span></button>)}</div>
           <AnimatePresence mode="wait" initial={false}><motion.div key={step} id="tempo-story-panel" role="tabpanel" aria-labelledby={`tempo-tab-${step}`} initial={{ y: reduced ? 0 : 14, opacity: .5 }} animate={{ y: 0, opacity: 1 }} exit={{ y: reduced ? 0 : -8, opacity: 0 }} transition={{ duration: .25 }}><h2>{t(stories[step].title)}</h2><p>{t(stories[step].body)}</p></motion.div></AnimatePresence>
@@ -118,7 +117,7 @@ function SchedulePreview({ t }: { t: Translate }) {
 
 function ClockPreview({ t }: { t: Translate }) {
   const [checked, setChecked] = useState(false);
-  return <div className="tempo-clock-preview"><div className="tempo-phone"><div className="tempo-phone-island" /><span className="tempo-mini-label">{t('Northline Festival')}</span><h3>{t(checked ? 'Check-in recorded' : 'Scan to clock in')}</h3><div className={`tempo-scan-window ${checked ? 'checked' : ''}`}><AnimatePresence mode="wait" initial={false}>{checked ? <motion.div className="tempo-check-circle" key="check" initial={{ scale: .6 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200, damping: 14 }}><Icon name="check" size={48} /></motion.div> : <motion.svg key="code" viewBox="0 0 120 120" className="tempo-qr" aria-label={t('Sample site code')}><g fill="currentColor">{[[8, 8], [78, 8], [8, 78]].map(([x, y]) => <g key={`${x}-${y}`}><path fillRule="evenodd" d={`M${x} ${y}h34v34H${x}z m6 6v22h22V${y + 6}z`} /><rect x={x + 11} y={y + 11} width="12" height="12" /></g>)}{Array.from({ length: 12 }, (_, row) => Array.from({ length: 12 }, (_, col) => ((row * 7 + col * 11 + row * col) % 5 < 2 && !((row < 5 && col < 5) || (row < 5 && col > 7) || (row > 7 && col < 5))) ? <rect key={`${row}-${col}`} x={8 + col * 8} y={8 + row * 8} width="6" height="6" /> : null))}</g></motion.svg>}</AnimatePresence>{!checked && <div className="tempo-scan-line" />}</div><p>{t(checked ? 'You’re on the clock.' : 'Main stage · East gate')}</p><button className="tempo-button" onClick={() => setChecked(!checked)}>{t(checked ? 'Try again' : 'Preview check-in')}<Icon name={checked ? 'check' : 'arrow'} size={17} /></button></div><div className="tempo-clock-caption"><span className="tempo-status-dot" />{t('Interactive preview')}</div></div>;
+  return <div className="tempo-clock-preview"><div className="tempo-phone"><div className="tempo-phone-island" /><span className="tempo-mini-label">{t('Northline Festival')}</span><h3>{t(checked ? 'Check-in recorded' : 'Scan to clock in')}</h3><div className={`tempo-scan-window ${checked ? 'checked' : ''}`}><AnimatePresence mode="wait" initial={false}>{checked ? <motion.div className="tempo-check-circle" key="check" initial={{ scale: .6 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200, damping: 14 }}><Icon name="check" size={48} /></motion.div> : <motion.svg key="code" viewBox="0 0 120 120" className="tempo-qr" aria-label={t('Sample site code')}><g fill="currentColor">{[[8, 8], [78, 8], [8, 78]].map(([x, y]) => <g key={`${x}-${y}`}><path fillRule="evenodd" d={`M${x} ${y}h34v34H${x}z m6 6v22h22V${y + 6}z`} /><rect x={x + 11} y={y + 11} width="12" height="12" /></g>)}{Array.from({ length: 12 }, (_, row) => Array.from({ length: 12 }, (_, col) => ((row * 7 + col * 11 + row * col) % 5 < 2 && !((row < 5 && col < 5) || (row < 5 && col > 7) || (row > 7 && col < 5))) ? <rect key={`${row}-${col}`} x={8 + col * 8} y={8 + row * 8} width="6" height="6" /> : null))}</g></motion.svg>}</AnimatePresence>{!checked && <div className="tempo-scan-line" />}</div><p>{t(checked ? 'You’re on the clock.' : 'Main stage · East gate')}</p><button className="tempo-button" onClick={() => setChecked(!checked)}>{t(checked ? 'Try again' : 'Preview check-in')}<Icon name={checked ? 'check' : 'arrow'} size={17} /></button></div><div className="tempo-clock-caption"><span className="tempo-status-dot" />{t('Check-in in action')}</div></div>;
 }
 
 function PayPreview({ t, language }: { t: Translate; language: Language }) {

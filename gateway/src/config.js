@@ -5,6 +5,10 @@ export const DEFAULT_RPCS = [
   'tempo_accept_invite', 'tempo_create_workspace', 'tempo_save_snapshot',
   'tempo_issue_qr', 'tempo_record_punch', 'tempo_record_break', 'tempo_review_time',
   'tempo_mark_notification_read', 'tempo_send_message', 'tempo_mark_message_read',
+  'tempo_sync_versions', 'tempo_meta_snapshot',
+  'tempo_task_list', 'tempo_task_list_compact', 'tempo_task_change', 'tempo_task_proof',
+  'tempo_request_list', 'tempo_request_submit', 'tempo_request_review',
+  'tempo_register_push', 'tempo_unregister_push',
 ];
 export const DEFAULT_TABLES = ['tempo_invites'];
 

@@ -5,7 +5,6 @@ import { AppState, Platform } from 'react-native';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-export const recoveryRedirect = Platform.OS === 'web' && typeof window !== 'undefined' && new URLSearchParams(window.location.hash.slice(1)).get('type') === 'recovery';
 
 // Optional Tempo API gateway (gateway/). When set, data API calls (/rest/v1) go
 // through it so the JWT is verified and rate limits apply before Supabase.
@@ -26,17 +25,17 @@ export const supabase = url && key
       ...(gatewayAllowed ? { global: { fetch: gatewayFetch } } : {}),
       auth: {
         ...(Platform.OS === 'web' ? {} : { storage: AsyncStorage }),
+        flowType: 'pkce',
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: Platform.OS === 'web',
+        detectSessionInUrl: false,
       },
     })
   : null;
 
 // Short-lived client for native OAuth. PKCE binds the returned code to a
 // verifier held only in this instance's memory, so a deep link fired by another
-// app cannot sign the user into a different account. Email links keep the
-// default flow, which works when they are opened on another device.
+// app cannot sign the user into a different account.
 export const createPkceClient = () => url && key
   ? createClient(url, key, { auth: { flowType: 'pkce', persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'tempo-oauth-pkce' } })
   : null;

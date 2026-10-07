@@ -4,6 +4,8 @@
 **Repository reviewed:** Tempo Workforce, Expo SDK 57  
 **Purpose:** Make the current product and its limits visible so you can decide what to keep, revise, add, defer, or remove.
 
+> **2026-10-07 update:** This audit is a dated baseline. Later code added shared tasks, proof photos, work requests, correction audits, and more SQL scripts. See the current [optimization plan](OPTIMIZATION_PROPOSAL.md) and the [migration order](SECURITY.md#applying-the-database-migration) before using its inventory or local test results for a launch decision.
+
 > **Decision summary:** Tempo is a useful event and shift-workforce MVP: it covers schedules, QR attendance, worker profiles, estimated time/pay, messaging, and exports across mobile and web. The web export, lint, and type checks pass locally. I would treat the current Supabase Free setup as a pilot/demo backend, not yet as a dependable long-term system for paid customers: shared data and old punches sit inside one JSON workspace record, and every active client asks for three full snapshots every 12 seconds. The UI’s “archive” is a hide/restore flag; it does not free database or bandwidth quota. Before a wider rollout, address snapshot transfer, photo placement, backup/retention, account deletion/privacy, and real-project role tests.
 
 The companion [data-loading and sync optimization proposal](OPTIMIZATION_PROPOSAL.md) turns the snapshot and storage findings into a code-focused, staged improvement plan.
@@ -36,7 +38,7 @@ The companion [data-loading and sync optimization proposal](OPTIMIZATION_PROPOSA
 | App shell | Expo SDK `~57.0.26`, React Native `0.86.3`, React `19.2.3`, TypeScript `~6.0.3`, Expo Router | Shared route tree with platform-specific screen implementations. Expo’s SDK 57 reference pairs SDK 57 with React Native 0.86 and React 19.2.3. |
 | UI | React Native/Web, Lucide icons, SVG, Reanimated/Worklets, Motion on web | Consistent mobile-first UI, but the exported web JavaScript bundle is substantial; native binary size was not measured. |
 | Device features | Expo Camera, Calendar, Location, Notifications, Image Picker/Manipulator, Audio, Haptics; community DateTimePicker | These need device permission handling and real-device checks. Expo Go is not a full substitute for native builds, especially for Watch connectivity. |
-| Auth and data | `@supabase/supabase-js`; email/password Auth; Postgres RPCs and row-level security | The app sends the publishable client key. Authorization is primarily implemented inside database functions rather than direct client table writes. |
+| Auth and data | `@supabase/supabase-js`; Google OAuth and PKCE in the current client; Postgres RPCs and row-level security | The app sends the publishable client key. Authorization is primarily implemented inside database functions rather than direct client table writes. Older deployed clients may still offer email/password. |
 | Watch | SwiftUI source under `targets/watch/`, `@bacons/apple-targets`, `@plevo/expo-watch-connectivity` | Apple Watch work is iOS-only and currently unverified on a signed build and paired physical devices. |
 | Web deploy | Expo web export, `vercel.json`, static output in `dist` | Export succeeds locally; a successful export does not prove the live Vercel deployment or native apps are healthy. |
 | Dependency install | npm with committed `package-lock.json` | `npm ci` is the repeatable install path. The install emitted deprecation notices; see the existing ship-readiness document for its earlier dependency-advisory note. |
@@ -48,7 +50,7 @@ The table includes shipped screens and the important behavior they expose. “Us
 | Screen/module | Current behavior | Status and usefulness | Review |
 |---|---|---|---|
 | Welcome and marketing | Product landing page, role-specific onboarding, English/Macedonian/Albanian UI language choices | Implemented; useful for acquisition and first-use explanation | Keep; validate translations with users and verify the published website content. |
-| Sign up, sign in, password recovery | Supabase email/password account flows; password reset; admin/worker intent; workspace setup or invitation wait state | Implemented; essential | Keep; add in-app account deletion and test email redirects and abuse controls. |
+| Sign up and sign in | Google OAuth; existing members enter their workspace; users without membership choose Employee or Admin after authentication; web callbacks handled during auth startup | Web deployed and Google login verified; new account chooser has component tests; native verification remains | Verify existing-account linking and invited workers, then disable the server Email provider after older clients are retired. Add in-app account deletion. |
 | Workspace and invitation | Admin creates one workspace; saves a worker invitation by email; worker confirms email and joins; instructions are manually shared | Partial; essential | Keep; the app does not send the invite email itself. Add resend/revoke/expiry and a clearer acceptance path if needed. |
 | Home | Admin overview of upcoming work; worker’s next shift and estimated daily pay | Implemented; useful daily landing screen | Keep. |
 | Schedule and history | Upcoming list, monthly grouping, seven-day expansion, finished shifts, history CSV | Implemented; core | Keep; add filters and a true calendar only if target users need them. |

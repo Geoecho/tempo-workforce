@@ -8,7 +8,7 @@ import { monthlyHourlyRate } from './monthly-pay';
 // Device-local extras: role tags, per-event overrides, and person tasks with photo proof.
 export type RoleTag = { id: string; name: string; color: string; details: string; rate?: number };
 export type RoleOverride = { roleIds?: string[]; details?: string };
-export type Task = { id: string; workerId: string; title: string; createdAt: string; doneAt?: string; proofUri?: string };
+export type Task = { id: string; workerId: string; title: string; createdAt: string; doneAt?: string; proofUri?: string; hasProof?: boolean };
 type Data = { roles: RoleTag[]; workerRoles: Record<string, string[]>; overrides: Record<string, RoleOverride>; tasks: Task[]; pay: Record<string, PayConfig>; shiftPay: Record<string, number> };
 const KEY = 'tempo-extras-v1';
 const empty: Data = { roles: [], workerRoles: {}, overrides: {}, tasks: [], pay: {}, shiftPay: {} };

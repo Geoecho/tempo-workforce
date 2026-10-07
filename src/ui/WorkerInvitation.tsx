@@ -32,7 +32,7 @@ export function WorkerInvitation({ workerId, alwaysOpen = false }: { workerId?: 
     try {
       const result = await inviteWorker(selected, address);
       setMessage(result.message);
-      if (result.ok) setInstructions(t(`You're invited to ${workspaceName || 'Tempo'}! Open https://tempo-workforce.vercel.app/ and choose “Join an existing team”. Create your account with ${address}, then confirm your email and sign in.`));
+      if (result.ok) setInstructions(t(`You're invited to ${workspaceName || 'Tempo'}! Open https://tempo-workforce.vercel.app/start and continue with the Google account for ${address}.`));
     } catch { setMessage('Could not save the invitation. Try again.'); }
     finally { setBusy(false); }
   };

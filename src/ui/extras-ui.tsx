@@ -9,6 +9,7 @@ import { takeProofPhoto } from '../lib/proof-photo';
 import { Button, Card, Section } from './components';
 import { useTheme } from './theme';
 import { monthlyHourlyRate } from '../lib/monthly-pay';
+import { supabase } from '../lib/supabase';
 
 export function RoleChip({ role, currency }: { role: RoleTag; currency?: Currency }) {
   return <View style={{ backgroundColor: role.color, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 }}>
@@ -58,7 +59,18 @@ function TaskRow({ task, canComplete, canManage }: { task: Task; canComplete: bo
   const [error, setError] = useState('');
   const done = !!task.doneAt;
   const [showProof, setShowProof] = useState(false);
+  const [remoteProof, setRemoteProof] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const toggleProof = async () => {
+    if (showProof) { setShowProof(false); return; }
+    setError('');
+    if (!task.proofUri && !remoteProof && supabase) {
+      const { data, error: failure } = await supabase.rpc('tempo_task_proof', { p_id: task.id });
+      if (failure || !data) { setError('Could not load the photo. Try again.'); return; }
+      setRemoteProof(String(data));
+    }
+    setShowProof(true);
+  };
   const finish = async () => {
     if (busy) return;
     setBusy(true); setError('');
@@ -72,8 +84,8 @@ function TaskRow({ task, canComplete, canManage }: { task: Task; canComplete: bo
       <View style={{ flex: 1 }}><Text style={{ color: C.ink, fontSize: 14, fontWeight: '500', textDecorationLine: done ? 'line-through' : 'none' }}>{task.title}</Text>{done && <Text style={{ color: C.muted, fontSize: 11, marginTop: 2 }}>Done {formatDay(task.doneAt!.slice(0, 10))} · photo attached</Text>}</View>
       {canManage && <Pressable accessibilityLabel="Delete task" onPress={() => { void removeTask(task.id).catch(e => setError(e.message)); }} style={{ padding: 6 }}><Trash2 size={16} color={C.muted} /></Pressable>}
     </View>
-    {done && !!task.proofUri && <Button label={showProof ? 'Hide photo' : 'View photo'} small variant="outline" onPress={() => setShowProof(value => !value)} />}
-    {done && !!task.proofUri && showProof && <Image source={{ uri: task.proofUri }} style={{ width: '100%', maxWidth: 320, height: 180, borderRadius: 12, backgroundColor: C.subtle }} resizeMode="cover" />}
+    {done && !!(task.proofUri || task.hasProof) && <Button label={showProof ? 'Hide photo' : 'View photo'} small variant="outline" onPress={() => { void toggleProof(); }} />}
+    {done && showProof && !!(task.proofUri || remoteProof) && <Image source={{ uri: task.proofUri || remoteProof! }} style={{ width: '100%', maxWidth: 320, height: 180, borderRadius: 12, backgroundColor: C.subtle }} resizeMode="cover" />}
     {!done && canComplete && <Pressable accessibilityRole="button" disabled={busy} onPress={() => void finish()} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: C.green, borderRadius: 12, minHeight: 48 }}><Camera size={16} color={C.onGreen} /><Text style={{ color: C.onGreen, fontWeight: '500', fontSize: 13, flexShrink: 1, textAlign: 'center' }}>{busy ? 'Saving…' : 'Take photo to finish'}</Text></Pressable>}
     {done && canComplete && <Pressable onPress={() => { void reopenTask(task.id).catch(e => setError(e.message)); }}><Text style={{ color: C.muted, fontSize: 12 }}>Reopen task</Text></Pressable>}
     {!!error && <Text style={{ color: C.red, fontSize: 12 }}>{error}</Text>}
@@ -103,7 +115,7 @@ export function TaskList({ workerId, admin, status = 'all', query = '', taskId }
     </View>}
     {!!(error || taskError) && <Text accessibilityRole="alert" style={{ color: C.red, fontSize: 12, lineHeight: 18, marginBottom: 12 }}>{error || taskError}</Text>}
     {mine.length > limit && <Button label="View more tasks" small variant="outline" onPress={() => setLimit(value => value + 10)} />}
-    {!tasksReady ? <Card><Text>Loading tasks…</Text></Card> : mine.length ? <Card style={{ padding: 0, overflow: 'hidden' }}>{mine.slice(0, limit).map((t, i) => <View key={t.id} style={{ borderTopWidth: i ? 1 : 0, borderTopColor: C.line }}><TaskRow task={t} canComplete={!admin} canManage={admin} /></View>)}</Card> : !taskError && <Text style={{ color: C.muted, fontSize: 13, lineHeight: 19, paddingVertical: 8 }}>{admin ? 'No tasks yet.' : 'No tasks assigned to you.'}</Text>}
+    {!tasksReady ? <Card><Text>Loading tasks…</Text></Card> : mine.length ? <Card style={{ padding: 0, overflow: 'hidden' }}>{mine.slice(0, limit).map((t, i) => <View key={`${t.id}:${t.doneAt ?? ''}`} style={{ borderTopWidth: i ? 1 : 0, borderTopColor: C.line }}><TaskRow task={t} canComplete={!admin} canManage={admin} /></View>)}</Card> : !taskError && <Text style={{ color: C.muted, fontSize: 13, lineHeight: 19, paddingVertical: 8 }}>{admin ? 'No tasks yet.' : 'No tasks assigned to you.'}</Text>}
   </View>;
 }
 

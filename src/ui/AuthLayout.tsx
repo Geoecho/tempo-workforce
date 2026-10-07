@@ -52,10 +52,9 @@ function makeLayoutStyles(C: ThemeColors) { return StyleSheet.create({
 
 function makeAuthStyles(C: ThemeColors) { return StyleSheet.create({
   label: { color: C.ink, fontSize: 12, fontWeight: '500', marginBottom: 9 },
-  input: { minHeight: 54, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 16, fontSize: 16, color: C.ink, marginBottom: 20 }, focused: { borderColor: C.accent, backgroundColor: C.field },
-  password: { minHeight: 54, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, flexDirection: 'row', alignItems: 'center', marginBottom: 20 }, passwordInput: { flex: 1, minHeight: 52, paddingHorizontal: 16, fontSize: 16, color: C.ink }, eye: { width: 48, minHeight: 52, alignItems: 'center', justifyContent: 'center' },
+  input: { minHeight: 54, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 16, fontSize: 16, color: C.ink, marginBottom: 20 },
   submit: { minHeight: 54, borderRadius: 12, backgroundColor: C.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 15 }, submitText: { color: C.onGreen, fontSize: 14, fontWeight: '500' },
-  error: { color: C.red, fontSize: 12, lineHeight: 19, marginBottom: 16 }, success: { color: C.green, fontSize: 13, lineHeight: 20, marginBottom: 16, backgroundColor: C.mint, borderRadius: 8, padding: 13 }, hint: { color: C.muted, fontSize: 12, lineHeight: 19, marginBottom: 20 }, back: { alignSelf: 'center', paddingVertical: 20, paddingHorizontal: 12 }, backText: { color: C.green, fontSize: 13 },
+  error: { color: C.red, fontSize: 12, lineHeight: 19, marginBottom: 16 }, hint: { color: C.muted, fontSize: 12, lineHeight: 19, marginBottom: 20 }, back: { alignSelf: 'center', paddingVertical: 20, paddingHorizontal: 12 }, backText: { color: C.green, fontSize: 13 },
 }); }
 
 export function useAuthStyles() { const C = useTheme().colors; return useMemo(() => makeAuthStyles(C), [C]); }

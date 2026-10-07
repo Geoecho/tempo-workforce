@@ -1,13 +1,30 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import { readFileSync, readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
-import { loadConfig } from '../src/config.js';
+import { DEFAULT_RPCS, loadConfig } from '../src/config.js';
 import { createVerifier } from '../src/jwt.js';
 import { createMemoryStore, createRateLimiter } from '../src/rate-limit.js';
 import { clientIp, createGateway } from '../src/server.js';
 
 const SECRET = 'legacy-test-secret-at-least-32-characters!';
+const srcRoot = fileURLToPath(new URL('../../src/', import.meta.url));
+function clientRpcs(path) {
+  return readdirSync(path, { withFileTypes: true }).flatMap(entry => {
+    const target = join(path, entry.name);
+    if (entry.isDirectory()) return clientRpcs(target);
+    if (!/\.tsx?$/.test(entry.name)) return [];
+    return [...readFileSync(target, 'utf8').matchAll(/\.rpc\(['"](tempo_[a-z_]+)['"]/g)].map(match => match[1]);
+  });
+}
+
+test('gateway permits every RPC used by the client', () => {
+  const missing = [...new Set(clientRpcs(srcRoot))].filter(name => !DEFAULT_RPCS.includes(name));
+  assert.deepEqual(missing, []);
+});
 let upstream, gateway, base, upstreamUrl, keys, otherKeys, upstreamCalls = 0;
 
 const listen = server => new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${server.address().port}`)));

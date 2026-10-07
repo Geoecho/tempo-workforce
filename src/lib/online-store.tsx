@@ -4,22 +4,27 @@ import { renameTeamInState, removeTeamInState } from './team-rename';
 import { archiveShiftGroup, restoreShiftRecord } from './shift-groups';
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, Pressable, View } from 'react-native';
 import { Text } from '../ui/LocalizedText';
 import { AuthScreen } from '../ui/AuthScreen';
-import { PasswordRecovery } from '../ui/PasswordRecovery';
 import { WorkspaceSetup } from '../ui/WorkspaceSetup';
+import { AccountSetup, AccountRole } from '../ui/AccountSetup';
 import { useTheme } from '../ui/theme';
 import { lateMinutes, lateNote, shiftHasEnded, BreakEvent, Currency, initialState, Message, newWorkspaceState, paySummary, Punch, Shift, ShiftNotification, State, TimeApproval, teamNames, today, uid, Worker } from './data';
 import { Context, Result } from './store-context';
-import { recoveryRedirect, supabase } from './supabase';
-import { consumeOAuthIntent } from './oauth';
+import { supabase } from './supabase';
+import { finishWebOAuth } from './oauth';
 import { mfaChallengeNeeded } from './mfa';
 import { MfaChallenge } from '../ui/MfaChallenge';
 
 import { clockInNotifications, useNotificationInbox } from './notification-inbox';
 
 type Snapshot = { workspaceId: string; version: number; state: State; notifications?: ShiftNotification[]; approvals?: TimeApproval[] };
+type SyncVersions = { workspaceId: string; workspaceVersion: number; sections: Record<string, number> };
+
+const isForeground = () => Platform.OS === 'web'
+  ? typeof document === 'undefined' || document.visibilityState === 'visible'
+  : AppState.currentState === 'active';
 
 // Tempo's RPCs (P0001), rate limits (PT…) and the gateway (GW…) raise messages
 // written for people. Anything else, such as constraint or permission errors,
@@ -37,14 +42,13 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   const C = useTheme().colors;
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [authMessage, setAuthMessage] = useState('');
   const [state, setState] = useState<State>(initialState);
   const [notifications, setNotifications] = useState<ShiftNotification[]>([]);
   const [approvals, setApprovals] = useState<TimeApproval[]>([]);
   const [breaks, setBreaks] = useState<BreakEvent[]>([]);
   const [ready, setReady] = useState(false);
-  const [waitingForInvite, setWaitingForInvite] = useState(false);
-  const [needsWorkspaceSetup, setNeedsWorkspaceSetup] = useState(false);
-  const [recoveringPassword, setRecoveringPassword] = useState(recoveryRedirect);
+  const [onboarding, setOnboarding] = useState<AccountRole | 'choose' | null>(null);
   const [mfaRequired, setMfaRequired] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -57,29 +61,35 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   const pendingRef = useRef(0);
   const generationRef = useRef(0);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
+  const knownSectionsRef = useRef<Record<string, number> | null>(null);
+  const syncSupportedRef = useRef(true);
+  const refreshBusyRef = useRef(false);
 
   const userId = session?.user.id;
-  const accountIntent = session?.user.user_metadata.tempo_intent;
   const inbox = useNotificationInbox(`${userId ?? 'signed-out'}:${workspaceId}:${state.role}`, state.role === 'admin' ? [...clockInNotifications(state), ...notifications] : notifications);
 
   useEffect(() => {
-    client.auth.getSession().then(({ data }) => setSession(data.session)).finally(() => setAuthReady(true));
-    const { data: { subscription } } = client.auth.onAuthStateChange((event, current) => {
-      if (event === 'PASSWORD_RECOVERY') setRecoveringPassword(true);
+    let active = true;
+    void (async () => {
+      try {
+        await finishWebOAuth(client);
+      } catch (error) {
+        if (active) setAuthMessage(error instanceof Error ? error.message : 'Google sign-in could not be completed.');
+      } finally {
+        const { data } = await client.auth.getSession();
+        if (active) { setSession(data.session); setAuthReady(true); }
+      }
+    })();
+    const { data: { subscription } } = client.auth.onAuthStateChange((_event, current) => {
       setSession(current);
-      if (!current) { setReady(false); setWorkspaceId(''); setRecoveringPassword(false); setMfaRequired(false); }
+      if (!current) { setReady(false); setWorkspaceId(''); setMfaRequired(false); knownSectionsRef.current = null; }
     });
-    return () => subscription.unsubscribe();
+    return () => { active = false; subscription.unsubscribe(); };
   }, []);
 
-  const loadSnapshot = useCallback(async (): Promise<State | null> => {
-    const [{ data, error }, { data: breakData, error: breakError }, { data: msgData }] = await Promise.all([
-      client.rpc('tempo_snapshot'),
-      client.rpc('tempo_break_snapshot'),
-      client.rpc('tempo_messages_snapshot'),
-    ]);
+  const loadWorkspaceSnapshot = useCallback(async (): Promise<State | null> => {
+    const { data, error } = await client.rpc('tempo_snapshot');
     if (error) throw error;
-    if (breakError) throw breakError;
     if (!data) return null;
     const snapshot = data as Snapshot;
     versionRef.current = snapshot.version;
@@ -87,35 +97,106 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
     setState(snapshot.state);
     setNotifications(snapshot.notifications ?? []);
     setApprovals(snapshot.approvals ?? []);
-    setBreaks((breakData as BreakEvent[] | null) ?? []);
-    setMessages((msgData as Message[] | null) ?? []);
     setWorkspaceId(snapshot.workspaceId);
     return snapshot.state;
   }, []);
 
-  const bootstrap = useCallback(async () => {
+  const loadBreakSnapshot = useCallback(async () => {
+    const { data, error } = await client.rpc('tempo_break_snapshot');
+    if (error) throw error;
+    setBreaks((data as BreakEvent[] | null) ?? []);
+  }, []);
+
+  const loadMessageSnapshot = useCallback(async () => {
+    const { data, error } = await client.rpc('tempo_messages_snapshot');
+    if (error) throw error;
+    setMessages((data as Message[] | null) ?? []);
+  }, []);
+
+  const loadMetaSnapshot = useCallback(async () => {
+    const { data, error } = await client.rpc('tempo_meta_snapshot');
+    if (error?.code === 'PGRST202' || error?.code === '42883') {
+      await loadWorkspaceSnapshot();
+      return;
+    }
+    if (error) throw error;
+    if (data) {
+      setNotifications((data.notifications as ShiftNotification[] | null) ?? []);
+      setApprovals((data.approvals as TimeApproval[] | null) ?? []);
+    }
+  }, [loadWorkspaceSnapshot]);
+
+  const loadSnapshot = useCallback(async (): Promise<State | null> => {
+    const status = syncSupportedRef.current ? client.rpc('tempo_sync_versions') : Promise.resolve(null);
+    const [statusResult, current] = await Promise.all([
+      status,
+      Promise.all([loadWorkspaceSnapshot(), loadBreakSnapshot(), loadMessageSnapshot()]),
+    ]);
+    if (statusResult?.error?.code === 'PGRST202' || statusResult?.error?.code === '42883') syncSupportedRef.current = false;
+    if (statusResult?.data) knownSectionsRef.current = (statusResult.data as SyncVersions).sections;
+    return current[0];
+  }, [loadWorkspaceSnapshot, loadBreakSnapshot, loadMessageSnapshot]);
+
+  const loadWorkspaceAfterWrite = useCallback(async (): Promise<State | null> => {
+    // Capture the revision before the read. A concurrent later write then
+    // remains visible to the next reconciliation check.
+    const status = syncSupportedRef.current ? await client.rpc('tempo_sync_versions') : null;
+    const fresh = await loadWorkspaceSnapshot();
+    if (status?.data && knownSectionsRef.current) {
+      const sections = (status.data as SyncVersions).sections;
+      knownSectionsRef.current = { ...knownSectionsRef.current, workspace: sections.workspace, meta: sections.meta };
+    }
+    return fresh;
+  }, [loadWorkspaceSnapshot]);
+
+  const refreshIfChanged = useCallback(async () => {
+    if (!isForeground() || pendingRef.current || refreshBusyRef.current) return;
+    refreshBusyRef.current = true;
+    try {
+      if (!syncSupportedRef.current) { await loadSnapshot(); return; }
+      const { data, error } = await client.rpc('tempo_sync_versions');
+      if (error?.code === 'PGRST202' || error?.code === '42883') {
+        syncSupportedRef.current = false;
+        await loadSnapshot();
+        return;
+      }
+      if (error) throw error;
+      if (!data) return;
+      const current = data as SyncVersions;
+      const previous = knownSectionsRef.current;
+      if (!previous || current.workspaceId !== workspaceId) { await loadSnapshot(); return; }
+      const workspaceChanged = current.workspaceVersion !== versionRef.current
+        || current.sections.workspace !== previous.workspace;
+      const metaChanged = current.sections.meta !== previous.meta;
+      await Promise.all([
+        workspaceChanged ? loadWorkspaceSnapshot() : metaChanged ? loadMetaSnapshot() : Promise.resolve(),
+        current.sections.breaks !== previous.breaks ? loadBreakSnapshot() : Promise.resolve(),
+        current.sections.messages !== previous.messages ? loadMessageSnapshot() : Promise.resolve(),
+      ]);
+      knownSectionsRef.current = current.sections;
+      setSyncError(null);
+    } finally {
+      refreshBusyRef.current = false;
+    }
+  }, [workspaceId, loadSnapshot, loadWorkspaceSnapshot, loadMetaSnapshot, loadBreakSnapshot, loadMessageSnapshot]);
+
+  const bootstrap = useCallback(async (selectedRole?: AccountRole) => {
     setLoadError(null);
-    setWaitingForInvite(false);
-    setNeedsWorkspaceSetup(false);
+    setReady(false);
+    setOnboarding(null);
     try {
       const { error: inviteError } = await client.rpc('tempo_accept_invite');
       if (inviteError) throw inviteError;
-      let current = await loadSnapshot();
-      const intent = accountIntent ?? (current ? undefined : await consumeOAuthIntent(client));
-      if (!current && intent === 'worker') {
-        setWaitingForInvite(true);
-        return;
-      }
+      const current = await loadSnapshot();
       if (!current) {
-        setNeedsWorkspaceSetup(true);
+        setOnboarding(selectedRole ?? 'choose');
         return;
       }
-      if (!current) throw new Error('Workspace could not be loaded.');
       setReady(true);
     } catch (error) {
       setLoadError(userMessage(error, 'Could not connect to the workspace.'));
     }
-  }, [loadSnapshot, accountIntent]);
+  }, [loadSnapshot]);
 
   const createWorkspace = async (name: string) => {
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -123,7 +204,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
     if (error) throw error;
     const current = await loadSnapshot();
     if (!current) throw new Error('Workspace could not be loaded.');
-    setNeedsWorkspaceSetup(false);
+    setOnboarding(null);
     setReady(true);
   };
 
@@ -137,27 +218,27 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (!ready || !workspaceId) return;
-    const timer = setInterval(() => {
-      if (pendingRef.current === 0) void loadSnapshot().catch(error =>
-        setSyncError(userMessage(error, 'Could not refresh shared data.'))
-      );
-    }, 12000);
-    return () => clearInterval(timer);
-  }, [ready, workspaceId, loadSnapshot]);
-
-  // Realtime: listen for new messages on this workspace
-  useEffect(() => {
-    if (!ready || !workspaceId) return;
-    const sub = client
-      .channel(`messages:${workspaceId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tempo_messages', filter: `workspace_id=eq.${workspaceId}` }, () => {
-        void client.rpc('tempo_messages_snapshot').then(({ data }) => {
-          if (data) setMessages(data as Message[]);
-        });
-      })
+    const refresh = () => { void refreshIfChanged().catch(error =>
+      setSyncError(userMessage(error, 'Could not refresh shared data.'))); };
+    let changeTimer: ReturnType<typeof setTimeout> | undefined;
+    const onRevision = () => {
+      if (changeTimer) clearTimeout(changeTimer);
+      changeTimer = setTimeout(refresh, 250);
+    };
+    const timer = setInterval(refresh, 60000);
+    const appState = AppState.addEventListener('change', status => { if (status === 'active') refresh(); });
+    if (Platform.OS === 'web' && typeof document !== 'undefined') document.addEventListener('visibilitychange', refresh);
+    const revisionChannel = client.channel(`sync:${workspaceId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tempo_sync_revisions', filter: `workspace_id=eq.${workspaceId}` }, onRevision)
       .subscribe();
-    return () => { void sub.unsubscribe(); };
-  }, [ready, workspaceId]);
+    return () => {
+      clearInterval(timer);
+      if (changeTimer) clearTimeout(changeTimer);
+      appState.remove();
+      if (Platform.OS === 'web' && typeof document !== 'undefined') document.removeEventListener('visibilitychange', refresh);
+      void client.removeChannel(revisionChannel);
+    };
+  }, [ready, workspaceId, refreshIfChanged]);
 
   const commit = (update: (current: State) => State) => {
     if (stateRef.current.role !== 'admin' || !workspaceId) return Promise.resolve({ ok: false, message: 'Admin access required.' });
@@ -258,7 +339,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
     const { data, error } = await client.rpc('tempo_record_punch', { p_payload: payload, p_source: source });
     if (error) return { ok: false, message: userMessage(error, 'Could not record your scan. Try again.') };
     try {
-      const fresh = await loadSnapshot();
+      const fresh = await loadWorkspaceAfterWrite();
       const worker = fresh?.workers.find(w => w.id === fresh.selectedWorkerId);
       const result = data as Result;
       let message = result.message;
@@ -275,7 +356,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   const toggleBreak = async (shiftId: string): Promise<Result> => {
     const { data, error } = await client.rpc('tempo_record_break', { p_shift_id: shiftId });
     if (error) return { ok: false, message: userMessage(error, 'Could not update your break. Try again.') };
-    await loadSnapshot();
+    await loadBreakSnapshot();
     return data as Result;
   };
 
@@ -306,7 +387,7 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   const reviewTime = async (workerId: string, date: string, approve: boolean): Promise<Result> => {
     const { error } = await client.rpc('tempo_review_time', { p_worker_id: workerId, p_date: date, p_approve: approve });
     if (error) return { ok: false, message: userMessage(error, 'Could not update the approval. Try again.') };
-    await loadSnapshot();
+    await loadMetaSnapshot();
     return { ok: true, message: approve ? 'Time approved.' : 'Approval removed.' };
   };
 
@@ -322,21 +403,21 @@ export function OnlineStoreProvider({ children }: { children: React.ReactNode })
   };
 
   if (!authReady) return <View style={{ flex: 1, justifyContent: 'center' }}><ActivityIndicator color={C.green} /></View>;
-  if (!session) return <AuthScreen />;
+  if (!session) return <AuthScreen initialMessage={authMessage} />;
   if (mfaRequired) return <MfaChallenge email={session.user.email ?? ''} onVerified={() => { setMfaRequired(false); void bootstrap(); }} onSignOut={async () => { await client.auth.signOut(); }} />;
-  if (recoveringPassword) return <PasswordRecovery email={session.user.email ?? ''} onComplete={() => { setRecoveringPassword(false); void bootstrap(); }} />;
-  if (needsWorkspaceSetup) return <WorkspaceSetup email={session.user.email ?? ''} onCreate={createWorkspace} onSignOut={async () => { await client.auth.signOut(); }} />;
+  if (onboarding === 'admin') return <WorkspaceSetup email={session.user.email ?? ''} onCreate={createWorkspace} onBack={() => setOnboarding('choose')} onSignOut={async () => { await client.auth.signOut(); }} />;
+  if (onboarding) return <AccountSetup email={session.user.email ?? ''} employee={onboarding === 'employee'} onChoose={setOnboarding} onRetry={() => bootstrap('employee')} onSignOut={async () => { await client.auth.signOut(); }} />;
   if (!ready) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: C.bg, padding: 25 }}>
-    {loadError || waitingForInvite ? <>
-      <Text style={{ color: C.ink, fontSize: 19, fontWeight: '700', textAlign: 'center' }}>{waitingForInvite ? 'Waiting for your invitation' : 'Could not load workspace'}</Text>
-      <Text style={{ color: C.muted, marginTop: 10, textAlign: 'center', lineHeight: 20 }}>{waitingForInvite ? 'Ask your admin to invite this email to a worker profile.' : loadError}</Text>
+    {loadError ? <>
+      <Text style={{ color: C.ink, fontSize: 19, fontWeight: '700', textAlign: 'center' }}>Could not load workspace</Text>
+      <Text style={{ color: C.muted, marginTop: 10, textAlign: 'center', lineHeight: 20 }}>{loadError}</Text>
       <Pressable onPress={() => void bootstrap()} style={{ marginTop: 22, padding: 12 }}><Text style={{ color: C.green, fontWeight: '700' }}>Try again</Text></Pressable>
       <Pressable onPress={() => void client.auth.signOut()} style={{ padding: 12 }}><Text style={{ color: C.red }}>Sign out</Text></Pressable>
     </> : <ActivityIndicator color={C.green} />}
   </View>;
 
   return <Context.Provider value={{
-    ...state, applyLocalCorrection: () => ({ ok: false, message: 'Use the request review service.' }), ready, online: true, syncStatus, retrySync, refreshSharedData: async () => { await queueRef.current; await loadSnapshot(); }, syncError, accountEmail: session.user.email ?? null, notifications: inbox.notifications, dismissNotification: inbox.dismissNotification, approvals, breaks, messages,
+    ...state, applyLocalCorrection: () => ({ ok: false, message: 'Use the request review service.' }), ready, online: true, syncStatus, retrySync, refreshSharedData: async () => { await queueRef.current; await loadWorkspaceAfterWrite(); }, syncError, accountEmail: session.user.email ?? null, notifications: inbox.notifications, dismissNotification: inbox.dismissNotification, approvals, breaks, messages,
     setRole: () => {}, setSelectedWorker: () => {}, addTeam, renameTeam, removeTeam,
     addWorker, updateWorker, removeWorker, restoreWorker, setCurrency, setWorkspaceName,
     saveSite, saveTemplate, editShiftSeries, addShift, addShifts, updateShift, removeShift, removeShifts, restoreShift, scan, toggleBreak, issueQr, markNotificationRead, markNotificationsRead, reviewTime,

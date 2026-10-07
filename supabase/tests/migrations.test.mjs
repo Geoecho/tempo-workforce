@@ -21,6 +21,7 @@ const migrations = [
   '20261004_shared_tasks.sql',
   '20261004_planning_workflows.sql',
   '20261004_task_completion.sql',
+  '20261007_sync_revisions.sql',
 ];
 test('every migration file is in the application order', () => {
   assert.deepEqual(readdirSync(dir).filter(name => name.endsWith('.sql')).sort(), [...migrations].sort());
@@ -293,8 +294,20 @@ test('shared tasks sync while enforcing worker and workspace boundaries', async 
     await assert.rejects(as(db, WORKER, "select public.tempo_task_change('add', 'task-3', 'w1', 'Unauthorized')"), /Admin access/);
     await assert.rejects(as(db, OTHER_WORKER, "select public.tempo_task_change('complete', 'task-1', null, null, 'data:image/jpeg;base64,aGVsbG8=')"), /assigned worker/);
     await assert.rejects(as(db, WORKER, "select public.tempo_task_change('complete', 'task-1', null, null, 'file:///device/photo.jpg')"), /Attach a JPEG/);
+    const beforeCompletion = value(await as(db, ADMIN, 'select public.tempo_sync_versions()'));
+    assert.equal(value(await as(db, STRANGER, 'select public.tempo_sync_versions()')), null);
     await as(db, WORKER, "select public.tempo_task_change('complete', 'task-1', null, null, 'data:image/jpeg;base64,aGVsbG8=')");
-    assert.ok(value(await as(db, ADMIN, 'select public.tempo_task_list()')).find(task => task.id === 'task-1').doneAt);
+    const afterCompletion = value(await as(db, ADMIN, 'select public.tempo_sync_versions()'));
+    assert.equal(afterCompletion.workspaceVersion, beforeCompletion.workspaceVersion);
+    assert.ok(afterCompletion.sections.tasks > beforeCompletion.sections.tasks);
+    assert.ok(afterCompletion.sections.meta > beforeCompletion.sections.meta);
+    const completed = value(await as(db, ADMIN, 'select public.tempo_task_list_compact()')).find(task => task.id === 'task-1');
+    assert.ok(completed.doneAt);
+    assert.equal(completed.hasProof, true);
+    assert.equal('proofUri' in completed, false);
+    assert.equal(value(await as(db, ADMIN, 'select public.tempo_task_list()')).find(task => task.id === 'task-1').proofUri, 'data:image/jpeg;base64,aGVsbG8=');
+    assert.equal(value(await as(db, ADMIN, "select public.tempo_task_proof('task-1')")), 'data:image/jpeg;base64,aGVsbG8=');
+    assert.equal(value(await as(db, OTHER_WORKER, "select public.tempo_task_proof('task-1')")), null);
     const alerts = value(await as(db, ADMIN, 'select public.tempo_snapshot()')).notifications;
     assert.equal(alerts.length, 1);
     assert.equal(alerts[0].kind, 'task-completed');

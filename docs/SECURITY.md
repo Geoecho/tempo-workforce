@@ -17,7 +17,7 @@ flowchart LR
     R[(Redis<br/>shared rate-limit counters)]
   end
   subgraph Supabase
-    AUTH[Auth<br/>password · OAuth · issues JWTs]
+    AUTH[Auth<br/>Google OAuth · issues JWTs]
     REST[PostgREST]
     DB[(Postgres<br/>RLS · security-definer RPCs · per-account rate limits)]
     RT[Realtime]
@@ -37,7 +37,7 @@ Tempo has no application server of its own. Supabase is the backend: Supabase Au
 | --- | --- | --- |
 | Edge | `deploy/k8s/base/ingress.yaml` | TLS only, HSTS, per-IP request and connection limits, body size limits |
 | Web | `deploy/web/default.conf.template`, `vercel.json` | CSP, no framing, `nosniff`, Permissions-Policy (camera and location for this site only), GET/HEAD only |
-| Gateway (optional) | `gateway/` | Verifies the Supabase JWT (signature, issuer, audience, expiry, role) before anything reaches Supabase; only the 13 RPCs and one table the app uses are reachable; per-IP and per-user rate limits shared through Redis; 22 MB body limit; PostgREST-shaped errors |
+| Gateway (optional) | `gateway/` | Verifies the Supabase JWT (signature, issuer, audience, expiry, role) before anything reaches Supabase; only the client RPC allowlist and one table are reachable; per-IP and per-user rate limits shared through Redis; 22 MB body limit; PostgREST-shaped errors |
 | Database (always on) | `supabase/20261003_security_hardening.sql` | Per-account rate limits on every write RPC, payload limits, recipient and visibility rules for messages, invite integrity, MFA enforcement, profile-photo validation |
 
 **The database is the real enforcement point.** The Supabase URL and publishable key ship inside every app build, so anyone can call Supabase directly and skip both the app and the gateway. The gateway is defense in depth plus traffic shaping. It cannot replace the database checks, and none of them were moved out of the database.
@@ -53,18 +53,13 @@ Auth and Realtime traffic goes straight to Supabase, not through the gateway. Su
 
 ### OAuth
 
-`src/lib/oauth.ts` adds Supabase OAuth sign-in (Google, Apple, Microsoft, GitHub). **It is off by default.** The buttons appear only when `EXPO_PUBLIC_AUTH_PROVIDERS` lists providers, so until you configure them the app looks and works exactly as before.
+`src/lib/oauth.ts` provides Google sign-in through Supabase OAuth. The current client offers Google only and has no email/password or recovery screen. The live Supabase Email provider setting is unverified; older deployed clients can still offer it while enabled. Disable it after existing users have confirmed Google access and older clients are retired.
 
-- On web, sign-in is a full-page redirect back to the site, and the session is picked up from the URL as it is for email links today.
+- On web, Google sign-in uses PKCE. New sign-ins return to `/start`; the app also handles callbacks to `/` from older builds. Authentication startup exchanges the authorization code using a verifier held in browser session storage and removes it from the URL.
 - On iOS and Android, sign-in uses the system auth browser (`expo-web-browser`) and returns to the `tempo://` scheme. This flow uses PKCE in a short-lived client: the returned code only works with a verifier held in that client's memory, and tokens placed directly in a redirect URL are ignored. Another app firing the deep link therefore cannot sign the user into a different account.
-- An OAuth account has no "admin or worker" choice in its metadata, so the choice on the sign-up screen is saved on the device and written to the account after the first sign-in. After that it behaves exactly like a password account, and invitations are accepted the same way. OAuth emails are already verified by the provider.
+- After Google sign-in, the app accepts invitations for the verified email and checks for an existing workspace membership. Existing members use the database-assigned role. If no membership exists, the app asks the user to choose Employee or Admin. Employee waits for an invitation; Admin can create a new workspace. This choice does not grant access to an existing firm's data, and user metadata is not used to assign permissions.
 
-To enable a provider:
-
-1. Supabase Dashboard → Authentication → Sign In / Providers: enable it and enter the provider's client ID and secret.
-2. Authentication → URL Configuration → Redirect URLs: add `https://tempo-workforce.vercel.app/**`, your Kubernetes web host (`https://tempo.example.com/**`), `tempo://**`, and for Expo Go development `exp://**`.
-3. Set `EXPO_PUBLIC_AUTH_PROVIDERS=google,apple` for the build.
-4. If Google is offered on iOS, App Store Guideline 4.8 requires Sign in with Apple as well.
+Follow [GOOGLE_SIGN_IN_SETUP.md](GOOGLE_SIGN_IN_SETUP.md) to configure Google and verify existing-account linking. If Google is offered in an iOS App Store build, also provide an equivalent privacy-preserving login under App Store Guideline 4.8; Sign in with Apple is the straightforward option. The current Google-only client does not yet satisfy that App Store requirement.
 
 A native build is required after this change because `expo-web-browser` was added.
 
@@ -72,8 +67,8 @@ A native build is required after this change because `expo-web-browser` was adde
 
 Any signed-in user can turn on authenticator-app (TOTP) verification in **Settings → Two-step verification**; it is recommended for admins. Accounts that do not turn it on work exactly as before.
 
-- After the password (or OAuth) step, an account with a verified authenticator sees a code screen before the workspace loads (`src/ui/MfaChallenge.tsx`).
-- **The database enforces it.** `tempo_require_mfa()` runs in every RPC. If the caller's account has a verified factor and the JWT's `aal` claim is not `aal2`, the request fails with HTTP 403. The invites RLS policy gets the same check through `tempo_is_admin`. A stolen password alone therefore gets no data, even by calling Supabase directly.
+- After Google sign-in, an account with a verified authenticator sees a code screen before the workspace loads (`src/ui/MfaChallenge.tsx`).
+- **The database enforces it.** `tempo_require_mfa()` runs in every RPC. If the caller's account has a verified factor and the JWT's `aal` claim is not `aal2`, the request fails with HTTP 403. The invites RLS policy gets the same check through `tempo_is_admin`. A stolen first-factor session alone therefore gets no data, even by calling Supabase directly.
 - Abandoned, never-verified enrolments do not lock an account.
 - TOTP is enabled by default in Supabase Auth (Authentication → Multi-Factor). Recovery for someone who loses their authenticator: an operator removes the factor in Supabase Dashboard → Authentication → Users.
 
@@ -116,7 +111,7 @@ Over the limit, Postgres raises SQLSTATE `PT429`, PostgREST returns HTTP 429, an
 | Priority | Setting | Why |
 | --- | --- | --- |
 | **Critical** (verified ON on 2026-10-03) | Authentication → Providers → Email → **Confirm email: ON** | `tempo_accept_invite` trusts `email_confirmed_at`. With auto-confirm on, anyone could register an invited worker's email address and take over that worker profile and pay data. The live project reports `mailer_autoconfirm: false`. Keep it that way. |
-| High | Authentication → Policies: minimum password length 8 and **leaked password protection** on | The client already asks for 8 characters; this enforces it server-side. |
+| High | Authentication → Providers: verify Google is enabled; retire Email after account migration | The current client uses Google only. Server-side Email availability remains unverified. |
 | High | Authentication → URL Configuration: list only the redirect URLs above | Stops email and OAuth links from redirecting to unlisted sites. |
 | High | Authentication → Sessions: refresh token rotation on, reuse interval about 10 s; JWT expiry 3600 s or less | Limits how long a stolen token stays useful. |
 | Medium | Project Settings → JWT Keys: migrate to asymmetric signing keys | The gateway can then verify tokens without holding a shared secret. |
@@ -127,11 +122,10 @@ Over the limit, Postgres raises SQLSTATE `PT429`, PostgREST returns HTTP 429, an
 
 These were left alone because changing them would change how the app behaves.
 
-- **Implicit auth flow on web.** Session tokens arrive in the URL fragment. Switching to PKCE would break email links opened on a different device or browser, and native-app emails that redirect to the website.
+- **Older email links and clients.** The current client uses PKCE and does not process password recovery. In-flight recovery links and older installed builds need an explicit migration plan before disabling Email in Supabase.
 - **Realtime on `tempo_messages` delivers nothing.** The table has no SELECT grant, so chat updates through the 12-second refresh instead. This is safe as is. Enabling Realtime needs a SELECT RLS policy that mirrors `tempo_messages_snapshot`.
 - **A live site QR is a bearer token for about 35 seconds** (already covered in `SHIP_READINESS.md`).
 - **`npm audit --omit=dev` reports 20 advisories (5 high)** in Expo's build-time config tooling (`xcode` → `uuid`). They are not in the shipped app bundle. The suggested `--force` fix downgrades Expo, so update when Expo publishes compatible releases. The gateway has 0 advisories.
-- **Web OAuth and email links still use the implicit flow** (see above), so a crafted link can sign a browser into the link creator's account (login CSRF). This was already the case for email links before this work.
 - **QR display devices still need an admin session**, and **account deletion is not implemented.** Both need product and legal decisions (who can display codes; which time records must be retained), so they remain launch blockers in `SHIP_READINESS.md`.
 - **`tests/pay.test.mjs` already failed before this work**, because `src/lib/data.ts` imports `./i18n` without an extension, which Node cannot resolve.
 
@@ -145,9 +139,13 @@ Apply in this order in the Supabase SQL Editor (or with `psql`). Two files share
 4. `20260930_punch_cooldown.sql`
 5. `20261001_messages.sql`
 6. `20261002_checkin_window.sql`
-7. `20261003_security_hardening.sql` ← new
+7. `20261003_security_hardening.sql`
+8. `20261004_shared_tasks.sql`
+9. `20261004_planning_workflows.sql`
+10. `20261004_task_completion.sql`
+11. `20261007_sync_revisions.sql`
 
-The new migration is a single transaction and is safe to run on a live project. It keeps existing data and redefines functions with the same signatures, so clients need no update.
+The sync-revision migration is additive and keeps the workspace JSON and existing task photos. Apply it before deploying the client that reads `tempo_sync_versions` and `tempo_task_proof`. Since this project contains live data, first rehearse this exact sequence and role checks on a disposable Supabase copy, confirm a backup can be restored, then schedule the live migration. The client falls back to a slower legacy refresh if this last migration is absent; old clients continue using their existing RPCs.
 
 ## Deploying to Kubernetes
 

@@ -202,7 +202,7 @@ const dynamicTranslations: Record<Exclude<Language, 'en-US'>, Record<string, str
     'Open {0} shift': 'Отвори смена {0}', 'Choose {0}': 'Избери {0}',
     'Checked in to {0}': 'Пријавени на {0}', 'Checked out of {0}': 'Одјавени од {0}',
     'Please wait {0} seconds before scanning again. Your last clock action was saved.': 'Почекајте {0} секунди пред повторно скенирање. Последното дејство е зачувано.',
-    "You're invited to {0}! Open https://tempo-workforce.vercel.app/ and choose “Join an existing team”. Create your account with {1}, then confirm your email and sign in.": 'Поканети сте во {0}! Отворете https://tempo-workforce.vercel.app/ и изберете „Приклучи се на постоечки тим“. Создајте сметка со {1}, потврдете ја е-поштата и најавете се.',
+    "You're invited to {0}! Open https://tempo-workforce.vercel.app/start and continue with the Google account for {1}.": 'Поканети сте во {0}! Отворете https://tempo-workforce.vercel.app/start и продолжете со Google сметката за {1}.',
   },
   'sq-AL': {
     'Break started {0} · Time remains paid': 'Pushimi filloi në {0} · Koha vazhdon të paguhet',
@@ -214,7 +214,7 @@ const dynamicTranslations: Record<Exclude<Language, 'en-US'>, Record<string, str
     'Open {0} shift': 'Hap turnin {0}', 'Choose {0}': 'Zgjidh {0}',
     'Checked in to {0}': 'Regjistruar në {0}', 'Checked out of {0}': 'Dalë nga {0}',
     'Please wait {0} seconds before scanning again. Your last clock action was saved.': 'Prisni {0} sekonda para skanimit tjetër. Veprimi i fundit u ruajt.',
-    "You're invited to {0}! Open https://tempo-workforce.vercel.app/ and choose “Join an existing team”. Create your account with {1}, then confirm your email and sign in.": 'Jeni ftuar në {0}! Hapni https://tempo-workforce.vercel.app/ dhe zgjidhni “Bashkohu me një ekip ekzistues”. Krijoni llogarinë me {1}, konfirmoni emailin dhe hyni.',
+    "You're invited to {0}! Open https://tempo-workforce.vercel.app/start and continue with the Google account for {1}.": 'Jeni ftuar në {0}! Hapni https://tempo-workforce.vercel.app/start dhe vazhdoni me llogarinë Google për {1}.',
   },
 };
 

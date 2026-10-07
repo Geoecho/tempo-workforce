@@ -1,50 +1,62 @@
-import { useWorkRequests } from '../lib/work-requests';
-import { ArrivalAttention } from '../ui/ArrivalAttention';
 import { router } from 'expo-router';
-import { Clock3, Plus, QrCode, ScanLine, TrendingUp, UsersRound, Wallet } from 'lucide-react-native';
-import React, { useState } from 'react';
-import { Platform, useWindowDimensions, View } from 'react-native';
-import { Pressable } from '../ui/LocalizedPressable';
-import { Text } from '../ui/LocalizedText';
-import { activeBreak, formatDay, formatMoney, formatTime, initialState, paySummary, payTimeLabel, today, shiftHasEnded, LATE_GRACE_MINUTES } from '../lib/data';
+import { ArrowUpRight, CalendarDays, CheckCheck, Clock3, Coffee, ListChecks, Plus, QrCode, ScanLine, UsersRound, Wallet } from 'lucide-react-native';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, Platform, View, useWindowDimensions } from 'react-native';
+import { activeBreak, formatDay, formatMoney, formatTime, localDate, payTimeLabel, shiftHasEnded, LATE_GRACE_MINUTES } from '../lib/data';
+import { dashboardWeek } from '../lib/dashboard-data';
 import { useStore } from '../lib/store';
 import { useNow } from '../lib/use-now';
 import { useExtras } from '../lib/extras';
-import { TaskList } from '../ui/extras-ui';
+import { useWorkRequests } from '../lib/work-requests';
 import { useLanguage } from '../lib/i18n';
-import { Button, Card, Empty, Pill, Screen, Section } from '../ui/components';
+import { ArrivalAttention } from '../ui/ArrivalAttention';
+import { TaskList } from '../ui/extras-ui';
+import { Screen } from '../ui/components';
 import { ShiftCard } from '../ui/ShiftCard';
-import { ContentGrid } from '../ui/ContentGrid';
 import { useTheme } from '../ui/theme';
 import { BrandMark } from '../ui/Brand';
+import { Pressable } from '../ui/LocalizedPressable';
+import { Text } from '../ui/LocalizedText';
+import { BentoCard, BentoTitle, DashboardAction, DashboardMotion, MetricCard } from '../ui/dashboard/Bento';
+import { ActivityChart, AttendanceRing, EarningsLine, Sparkline } from '../ui/dashboard/Charts';
 
 export default function Home() {
   const C = useTheme().colors;
   const { language, t } = useLanguage();
   const { width } = useWindowDimensions();
-  const desktop = Platform.OS === 'web' && width >= 1200;
-  const desktopNavigation = Platform.OS === 'web' && width >= 960;
+  const columns = Platform.OS === 'web' && width >= 1100;
+  const compactMetrics = Platform.OS !== 'web' || width < 1200;
   const now = useNow();
-  const hour = new Date(now).getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const day = localDate(new Date(now));
   const { role, workers, shifts, punches, breaks, toggleBreak, selectedWorkerId, currency, workspaceName } = useStore();
+  const { tasks } = useExtras();
   const { items: workRequests } = useWorkRequests();
-  const pendingRequests = workRequests.filter(request => request.status === 'pending').length;
   const [breakBusy, setBreakBusy] = useState(false);
   const [breakMessage, setBreakMessage] = useState('');
-  const worker = workers.find(w => w.id === selectedWorkerId && !w.archived) ?? workers.find(w => !w.archived) ?? { ...initialState.workers[0], name: workspaceName || 'Tempo', initials: (workspaceName || 'Tempo').slice(0, 1).toUpperCase() };
-  const day = today();
-  const todays = shifts.filter(s => !s.archived && s.date === day && (role === 'admin' || s.workerIds.includes(selectedWorkerId)));
-  const scheduled = shifts.filter(s => !s.archived && !shiftHasEnded(s, now) && (role === 'admin' || s.workerIds.includes(selectedWorkerId))).sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
-  const latest = new Map([...punches].sort((a, b) => a.at.localeCompare(b.at)).map(p => [`${p.shiftId}:${p.workerId}`, p]));
-  const active = [...latest.values()].find(p => p.workerId === selectedWorkerId && p.type === 'in' && shifts.some(s => s.id === p.shiftId && !s.archived));
+  const admin = role === 'admin';
+  const worker = workers.find(person => person.id === selectedWorkerId);
+  const scope = useMemo(() => admin ? workers : workers.filter(person => person.id === selectedWorkerId), [workers, admin, selectedWorkerId]);
+  // Reuse cached punches and the pay registry refreshed by ExtrasProvider.
+  const week = dashboardWeek(punches, scope, now);
+  const todayPay = week[6];
+  const weeklyHours = week.reduce((sum, item) => sum + item.paidSeconds, 0);
+  const weeklyPay = week.reduce((sum, item) => sum + item.earningsCents, 0);
+  const activeWorkers = workers.filter(person => !person.archived);
+  const todays = shifts.filter(shift => !shift.archived && shift.date === day && (admin || shift.workerIds.includes(selectedWorkerId)));
+  const scheduled = shifts.filter(shift => !shift.archived && !shiftHasEnded(shift, now) && (admin || shift.workerIds.includes(selectedWorkerId))).sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
+  const latest = useMemo(() => new Map([...punches].sort((a, b) => a.at.localeCompare(b.at)).map(punch => [`${punch.shiftId}:${punch.workerId}`, punch])), [punches]);
+  const active = [...latest.values()].find(punch => punch.workerId === selectedWorkerId && punch.type === 'in' && shifts.some(shift => shift.id === punch.shiftId && !shift.archived));
   const isIn = !!active;
-  const currentShift = shifts.find(s => s.id === active?.shiftId) ?? scheduled[0];
-  const crewIds = [...new Set(todays.flatMap(s => s.workerIds))].filter(id => workers.some(w => w.id === id && !w.archived));
-  const clockedIn = new Set([...latest.values()].filter(p => p.type === 'in' && todays.some(s => s.id === p.shiftId)).map(p => p.workerId)).size;
-  const arrivalIssues = todays.filter(s => now > new Date(`${s.date}T${s.start}:00`).getTime() + LATE_GRACE_MINUTES * 60000).sort((a, b) => a.start.localeCompare(b.start)).map(shift => ({ shift, workers: workers.filter(w => !w.archived && shift.workerIds.includes(w.id) && !punches.some(p => p.shiftId === shift.id && p.workerId === w.id && p.type === 'in')) })).filter(issue => issue.workers.length > 0);
-  const notArrived = [...new Set(arrivalIssues.flatMap(issue => issue.workers.map(w => w.id)))];
+  const currentShift = shifts.find(shift => shift.id === active?.shiftId) ?? scheduled[0];
+  const crewIds = [...new Set(todays.flatMap(shift => shift.workerIds))].filter(id => activeWorkers.some(person => person.id === id));
+  const todayShiftIds = new Set(todays.map(shift => shift.id));
+  const clockedIn = new Set([...latest.values()].filter(punch => punch.type === 'in' && todayShiftIds.has(punch.shiftId) && crewIds.includes(punch.workerId)).map(punch => punch.workerId)).size;
+  const arrived = crewIds.filter(id => punches.some(punch => punch.workerId === id && punch.type === 'in' && todayShiftIds.has(punch.shiftId))).length;
+  const arrivalIssues = todays.filter(shift => now > new Date(`${shift.date}T${shift.start}:00`).getTime() + LATE_GRACE_MINUTES * 60000).sort((a, b) => a.start.localeCompare(b.start)).map(shift => ({ shift, workers: activeWorkers.filter(person => shift.workerIds.includes(person.id) && !punches.some(punch => punch.shiftId === shift.id && punch.workerId === person.id && punch.type === 'in')) })).filter(issue => issue.workers.length > 0);
+  const notArrived = new Set(arrivalIssues.flatMap(issue => issue.workers.map(person => person.id))).size;
   const onBreak = isIn && active ? activeBreak(breaks, punches, active.shiftId, selectedWorkerId) : null;
+  const pendingTasks = tasks.filter(task => !task.doneAt && (admin || task.workerId === selectedWorkerId)).length;
+  const pendingRequests = workRequests.filter(request => request.status === 'pending').length;
   const changeBreak = async () => {
     if (!isIn || !active || breakBusy) return;
     setBreakBusy(true);
@@ -52,51 +64,61 @@ export default function Home() {
     catch { setBreakMessage('Could not update your break. Try again.'); }
     finally { setBreakBusy(false); }
   };
-  useExtras();
-  const myPay = paySummary(punches, worker, day);
-  const teamPay = workers.reduce((sum, w) => sum + paySummary(punches, w, day).earningsCents, 0);
-  const quickActions = <Card style={{ minHeight: desktop ? 200 : undefined, flex: desktop ? 1 : undefined, padding: 0, overflow: 'hidden' }}><View style={{ paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: C.line }}><Text style={{ color: C.ink, fontSize: 16, fontWeight: '500' }}>{t('Quick actions')}</Text></View><Pressable onPress={() => router.push('/team')} style={{ paddingHorizontal: 20, paddingVertical: 17, flex: desktop ? 1 : undefined, minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 13, borderBottomWidth: 1, borderBottomColor: C.line }}><UsersRound size={19} color={C.green} /><Text style={{ color: C.ink, fontSize: 14, flex: 1 }}>Contact team</Text><Text style={{ color: C.muted }}>→</Text></Pressable><Pressable onPress={() => router.push('/time')} style={{ paddingHorizontal: 20, paddingVertical: 17, flex: desktop ? 1 : undefined, minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 13 }}><TrendingUp size={19} color={C.green} /><Text style={{ color: C.ink, fontSize: 14, flex: 1 }}>Review pay</Text><Text style={{ color: C.muted }}>→</Text></Pressable></Card>;
-  const { tasks } = useExtras();
-  const pendingTasks = tasks.filter(task => !task.doneAt).length;
-  return <Screen title={`${t(greeting)}${role === 'worker' ? ', ' + worker.name.split(' ')[0] : ''}.`} subtitle={new Date().toLocaleDateString(language, { weekday: 'long', month: 'long', day: 'numeric' })}>
-    {role === 'admin' && pendingRequests > 0 && <Card style={{ marginBottom: 20, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 16 }}><Text style={{ flex: 1, color: C.ink }}>{pendingRequests} <Text>work requests awaiting review</Text></Text><Button label="Review work requests" small variant="outline" onPress={() => router.push('/requests')} /></Card>}
-    {role === 'admin' ? <>
-      <Section title="Today’s crew" action="Team" onAction={() => router.push('/team')} />
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
-        {[{ label: 'Scheduled', count: crewIds.length }, { label: 'Clocked in', count: clockedIn }, { label: 'Not arrived', count: notArrived.length }].map(stat => <Card key={stat.label} style={{ flexGrow: 1, flexBasis: 90, padding: 12 }}><Text style={{ color: C.muted, fontSize: 14 }}>{stat.label}</Text><Text style={{ color: stat.label === 'Not arrived' && stat.count ? C.warningText : C.green, fontSize: 30, fontWeight: '600', marginTop: 8 }}>{stat.count}</Text></Card>)}
+  const hour = new Date(now).getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const metrics = admin ? [
+    { label: 'Scheduled today', value: String(crewIds.length), detail: `${todays.length} ${t('Shifts').toLowerCase()}`, icon: <CalendarDays size={18} color={C.green} /> },
+    { label: 'On the clock', value: String(clockedIn), detail: notArrived ? `${notArrived} ${t('Not arrived').toLowerCase()}` : 'Attendance at a glance', icon: <Clock3 size={18} color={C.green} /> },
+    { label: 'Team members', value: String(activeWorkers.length), detail: 'Your active crew', icon: <UsersRound size={18} color={C.green} /> },
+    { label: 'Estimated pay today', value: formatMoney(todayPay.earningsCents, currency), detail: `${payTimeLabel(todayPay.paidSeconds)} ${t('paid')}`, icon: <Wallet size={18} color={C.green} /> },
+  ] : [
+    { label: 'Paid time today', value: payTimeLabel(todayPay.paidSeconds), detail: '10h daily cap', icon: <Clock3 size={18} color={C.green} /> },
+    { label: 'Paid time · 7 days', value: payTimeLabel(weeklyHours), detail: 'Your recorded hours', icon: <CheckCheck size={18} color={C.green} /> },
+    { label: 'Upcoming shifts', value: String(scheduled.length), detail: 'Your next assignments', icon: <CalendarDays size={18} color={C.green} /> },
+    { label: 'Pending tasks', value: String(pendingTasks), detail: 'Assigned to you', icon: <ListChecks size={18} color={C.green} /> },
+  ];
+
+  return <Screen title={`${t(greeting)}${!admin && worker ? ', ' + worker.name.split(' ')[0] : ''}.`} subtitle={new Date(now).toLocaleDateString(language, { weekday: 'long', month: 'long', day: 'numeric' })}>
+    <DashboardMotion>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, gap: 16 }}><Text style={{ fontSize: 11, fontWeight: '600', letterSpacing: 1.8, color: C.muted }}>{admin ? 'WORKSPACE OVERVIEW' : 'YOUR PERSONAL OVERVIEW'}</Text><View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 20, backgroundColor: C.mint }}><View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: C.green }} /><Text style={{ color: C.green, fontSize: 10 }}>Today</Text></View></View>
+      <View style={{ flexDirection: columns ? 'row' : 'column', gap: 18, alignItems: 'stretch', marginBottom: 18 }}>
+        <BentoCard tone="forest" style={{ flex: columns ? 1.6 : undefined, minHeight: 268, padding: columns ? 30 : 24 }}>
+          <View pointerEvents="none" style={{ position: 'absolute', right: -48, bottom: -40, opacity: .08 }}><BrandMark size={230} color="#D5EEAB" /></View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 20 }}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#D5EEAB' }} /><Text style={{ color: '#D5EEAB', fontSize: 10, fontWeight: '600', letterSpacing: 1.4 }}>{admin ? workspaceName || 'TEMPO WORKSPACE' : onBreak ? 'PAID BREAK' : isIn ? 'ON THE CLOCK' : 'READY WHEN YOU ARE'}</Text></View>
+          <Text style={{ color: '#F8FBF1', fontSize: columns ? 34 : 29, lineHeight: columns ? 40 : 35, letterSpacing: -1.25, maxWidth: 440 }}>{admin ? 'Good work starts with a clear plan.' : onBreak ? 'A moment to recharge.' : isIn ? 'You’re right on time.' : 'Your next great shift starts here.'}</Text>
+          <Text style={{ color: '#BACDBB', fontSize: 13, lineHeight: 21, marginTop: 12, maxWidth: 410 }}>{admin ? 'Plan your crew, keep time clear, and make space for a smoother day.' : onBreak ? `Break started ${formatTime(onBreak.at)} · Time remains paid` : isIn && active ? `Clocked in since ${formatTime(active.at)}` : currentShift ? `${currentShift.title} · ${formatDay(currentShift.date)} · ${currentShift.start}–${currentShift.end}` : 'Your assigned shifts will appear here. Keep an eye on your schedule.'}</Text>
+          {!admin && currentShift && <Text style={{ color: '#D7E4CD', fontSize: 12, lineHeight: 20, marginTop: 8 }}>{currentShift.site} · {currentShift.location}</Text>}
+          {!admin && isIn && active && <Text style={{ fontSize: 30, color: '#D5EEAB', letterSpacing: -.8, marginTop: 18 }}>{payTimeLabel(Math.max(0, (now - new Date(active.at).getTime()) / 1000))}<Text style={{ fontSize: 11 }}> elapsed</Text></Text>}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 24 }}>
+            {admin ? <><DashboardAction hero label="Create shift" icon={<Plus size={16} color="#183C2C" />} onPress={() => router.push('/new-shift')} /><DashboardAction hero label="Site QR" icon={<QrCode size={16} color="#183C2C" />} onPress={() => router.push('/pass')} /></> : <><DashboardAction hero label={isIn ? 'Scan to clock out' : 'Scan to clock in'} icon={<QrCode size={16} color="#183C2C" />} onPress={() => router.push('/scan')} />{isIn && <Pressable accessibilityRole="button" disabled={breakBusy} accessibilityState={{ disabled: breakBusy }} onPress={() => void changeBreak()} style={({ pressed }) => ({ minHeight: 48, paddingHorizontal: 14, borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: '#5C7965', opacity: pressed || breakBusy ? .65 : 1 })}>{breakBusy ? <ActivityIndicator color="#D5EEAB" /> : <Coffee size={16} color="#D5EEAB" />}<Text style={{ fontSize: 12, color: '#E5F0DA' }}>{onBreak ? 'End paid break' : 'Start paid break'}</Text></Pressable>}</>}
+          </View>
+          {!!breakMessage && <Text accessibilityRole="alert" style={{ fontSize: 12, lineHeight: 18, color: '#E5F0DA', marginTop: 12 }}>{breakMessage}</Text>}
+        </BentoCard>
+        {admin ? <BentoCard delay={60} style={{ flex: columns ? 1 : undefined, minHeight: 268 }}><AttendanceRing arrived={arrived} scheduled={crewIds.length} active={clockedIn} missing={notArrived} /></BentoCard> : <BentoCard tone="mint" delay={60} style={{ flex: columns ? 1 : undefined, minHeight: 268 }}><BentoTitle title="Your earnings" detail="Estimated pay today" action="Timesheet" onAction={() => router.push('/time')} /><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={.5} style={{ color: C.green, fontSize: 39, letterSpacing: -1.7 }}>{formatMoney(todayPay.earningsCents, currency)}</Text><EarningsLine days={week} /><View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 14, gap: 10 }}><Text style={{ color: C.muted, fontSize: 11 }}>Last 7 days</Text><Text style={{ fontSize: 12, color: C.green, fontWeight: '600' }}>{formatMoney(weeklyPay, currency)}</Text></View></BentoCard>}
       </View>
-      <Card style={{ marginBottom: 16, padding: 18, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}><View style={{ flex: 1, minWidth: 160 }}><Text style={{ fontSize: 17, fontWeight: '600' }}>Team tasks</Text><Text style={{ color: C.muted, lineHeight: 20, marginTop: 4 }}>{pendingTasks} <Text>tasks awaiting completion</Text></Text></View><Button label="View tasks" small variant="outline" onPress={() => router.push('/tasks')} /></Card>
-      <ArrivalAttention issues={arrivalIssues} now={now} />
-      <View style={{ marginBottom: 16 }}><Button label="Review time records" variant="outline" onPress={() => router.push('/time')} /></View>
-      <View style={{ flexDirection: desktop ? 'row' : 'column', gap: desktop ? 20 : 0, alignItems: 'stretch' }}><View style={{ flex: desktop ? 1 : undefined, minWidth: 0 }}><Card style={{ minHeight: desktop ? 200 : undefined, flex: desktop ? 1 : undefined, backgroundColor: C.mint, borderColor: C.line, padding: desktop ? 28 : 23, overflow: 'hidden' }}><View pointerEvents="none" style={{ position: 'absolute', opacity: .06, right: -13, top: -15 }}><BrandMark size={200} /></View><View style={{ maxWidth: 460 }}><Text style={{ color: C.green, fontSize: 25, letterSpacing: -.8 }}>{t('Plan today’s work')}</Text><Text style={{ color: C.muted, fontSize: 14, lineHeight: 21, marginTop: 9 }}>{t('Plan the next shift or open the site code for your crew.')}</Text><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 23, alignSelf: 'stretch' }}><View style={{ flexGrow: 1, flexBasis: 140 }}><Button label="Create shift" small icon={<Plus size={16} color={C.onGreen} />} onPress={() => router.push('/new-shift')} /></View><View style={{ flexGrow: 1, flexBasis: 140 }}><Button label="Site QR" small variant="outline" icon={<QrCode size={16} color={C.green} />} onPress={() => router.push('/pass')} /></View>{!desktopNavigation && <View style={{ flexGrow: 1, flexBasis: 140 }}><Button label="Scan worker" small variant="outline" icon={<ScanLine size={16} color={C.green} />} onPress={() => router.push('/scan-worker')} /></View>}</View></View></Card></View>{desktop && <View style={{ flex: 1, minWidth: 0 }}>{quickActions}</View>}</View>
-      <Card style={{ backgroundColor: C.green, borderColor: C.green, padding: 20, marginTop: 16, marginBottom: 20, overflow: 'hidden' }}>
-        <View pointerEvents="none" style={{ position: 'absolute', right: -20, top: -10, opacity: .08 }}><Wallet size={170} color={C.onGreen} /></View>
-        <Text style={{ color: C.onGreen, fontSize: 12, opacity: .85 }}>{t('Estimated pay today')}</Text>
-        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{ color: C.onGreen, fontSize: desktop ? 32 : 28, letterSpacing: -1.4, marginTop: 8 }}>{formatMoney(teamPay, currency)}</Text>
-        <Text style={{ color: C.onGreen, fontSize: 12, opacity: .85, marginTop: 10 }}>{todays.length} {t('scheduled today').toLowerCase()} · {workers.filter(w => !w.archived).length} {t('Team members').toLowerCase()}</Text>
-      </Card>
-      {!workers.some(w => !w.archived) && <Card style={{ marginTop: 15 }}><Text style={{ color: C.ink, fontSize: 17 }}>{t('Set up your crew')}</Text><Text style={{ color: C.muted, fontSize: 14, lineHeight: 21, marginTop: 8, marginBottom: 18 }}>Create a team, add people, then invite them to sign in. Once your crew is ready, schedule the first shift.</Text><Button label="Add your first team" small onPress={() => router.push('/team')} /></Card>}
-      <Section title="Upcoming shifts" action="See all" onAction={() => router.push('/schedule')} />
-      {scheduled.length ? [...new Set(scheduled.map(s => s.date))].slice(0, 4).map(d => { const list = scheduled.filter(s => s.date === d).sort((a, b) => a.start.localeCompare(b.start)); const tm = new Date(); tm.setDate(tm.getDate() + 1); const tomorrow = `${tm.getFullYear()}-${String(tm.getMonth() + 1).padStart(2, '0')}-${String(tm.getDate()).padStart(2, '0')}`; return <View key={d} style={{ marginBottom: 8 }}><View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 6, marginBottom: 10 }}><Text style={{ color: C.ink, fontSize: 15, fontWeight: '600' }}>{d === day ? t('Today') : d === tomorrow ? t('Tomorrow') : formatDay(d)}</Text><Text style={{ color: C.muted, fontSize: 12 }}>{list.length} {t('Shifts').toLowerCase()}</Text></View><ContentGrid>{list.map(sh => <ShiftCard key={sh.id} shift={sh} compact hideDate now={now} />)}</ContentGrid></View>; }) : <Empty title="No upcoming shifts" detail="Create your first shift to start planning." action="Create shift" onAction={() => router.push('/new-shift')} />}
-      {!desktop && <View style={{ marginTop: 18 }}>{quickActions}</View>}
-    </> : <>
-      <Card style={{ backgroundColor: C.green, borderColor: C.green, padding: desktop ? 30 : 24, overflow: 'hidden' }}><View pointerEvents="none" style={{ position: 'absolute', right: -25, top: 45, opacity: .08 }}><BrandMark size={185} color={C.onGreen} /></View><View style={{ alignItems: 'flex-start' }}><Pill tone={isIn ? 'green' : 'gray'}>{t(onBreak ? 'PAID BREAK' : isIn ? 'ON THE CLOCK' : 'OFF THE CLOCK')}</Pill></View><Text style={{ color: C.onGreen, fontSize: 30, fontWeight: '400', letterSpacing: -.9, marginTop: 23 }}>{t(onBreak ? 'Take your break.' : isIn ? 'You’re clocked in' : 'Ready for your shift?')}</Text><Text style={{ color: C.onGreen, fontSize: 14, lineHeight: 21, marginTop: 10 }}>{onBreak ? 'Break started ' + formatTime(onBreak.at) + ' · Time remains paid' : isIn && active ? 'Since ' + formatTime(active.at) : t(desktopNavigation ? 'View your schedule and manage your shift below.' : 'Scan your site code when you arrive.')}</Text>{currentShift && <View style={{ marginTop: 16 }}><Text style={{ color: C.onGreen, fontSize: 18, fontWeight: '600' }}>{currentShift.title}</Text><Text style={{ color: C.onGreen, fontSize: 15, lineHeight: 23, marginTop: 6 }}>{formatDay(currentShift.date)} · {currentShift.start}–{currentShift.end}</Text><Text style={{ color: C.onGreen, fontSize: 15, lineHeight: 23 }}>{currentShift.site} · {currentShift.location}</Text></View>}{isIn && active && <Text style={{ color: C.onGreen, fontSize: 24, marginTop: 14 }}>{payTimeLabel(Math.max(0, (now - new Date(active.at).getTime()) / 1000))} <Text style={{ fontSize: 14 }}>elapsed</Text></Text>}{!desktopNavigation && <View style={{ marginTop: 26 }}><Button label={isIn ? 'Scan to clock out' : 'Scan to clock in'} variant="light" icon={<QrCode size={17} color={C.green} />} onPress={() => router.push('/scan')} /></View>}{isIn && <Pressable accessibilityRole="button" disabled={breakBusy} onPress={() => void changeBreak()} accessibilityState={{ disabled: breakBusy }} style={{ alignItems: 'center', justifyContent: 'center', minHeight: 48, borderWidth: 1, borderColor: C.onGreen, borderRadius: 10, marginTop: 8, opacity: breakBusy ? .5 : 1 }}><Text style={{ color: C.onGreen, fontSize: 14 }}>{t(breakBusy ? 'Saving…' : onBreak ? 'End paid break' : 'Start paid break')}</Text></Pressable>}{!!breakMessage && <Text style={{ color: C.onGreen, fontSize: 11, textAlign: 'center' }}>{breakMessage}</Text>}</Card>
-      {!desktopNavigation && <Card style={{ marginTop: 16, padding: 18 }}><Button label="ID" variant="outline" icon={<QrCode size={18} color={C.green} />} onPress={() => router.push('/my-code')} /><Text style={{ color: C.muted, fontSize: 13, lineHeight: 19, marginTop: 10 }}>Show your ID when a manager asks. To record attendance, scan the site code above.</Text></Card>}
-      <Card style={{ backgroundColor: C.mint, borderColor: C.line, padding: desktop ? 30 : 24, marginTop: 16, marginBottom: 14 }}>
-        <Text style={{ color: C.muted, fontSize: 12, lineHeight: 17, flexShrink: 1 }}>{t('Estimated earnings')} · {t('Your pay today').toLowerCase()}</Text>
-        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{ color: C.green, fontSize: desktop ? 32 : 28, letterSpacing: -1.4, marginTop: 8 }}>{formatMoney(myPay.earningsCents, currency)}</Text>
-        <View style={{ marginTop: 14, gap: 10 }}><View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 7 }}><Clock3 color={C.green} size={16} style={{ marginTop: 1 }} /><Text style={{ color: C.muted, fontSize: 12, lineHeight: 17, flex: 1, flexShrink: 1 }}>{payTimeLabel(myPay.payableSeconds)} {t('paid')} · {t('10h daily cap')}</Text></View><Pressable accessibilityRole="button" onPress={() => router.push('/time')} style={{ alignSelf: 'flex-start', minHeight: 48, justifyContent: 'center' }}><Text style={{ color: C.green, fontSize: 14, fontWeight: '500', flexShrink: 1 }}>{t('View timesheet')} →</Text></Pressable></View>
-      </Card>
-      <View style={{ flexDirection: desktop ? 'row' : 'column', alignItems: 'flex-start', gap: 24 }}>
-        <View style={{ flex: desktop ? 1 : undefined, width: desktop ? undefined : '100%', minWidth: 0, flexShrink: 0 }}>
-          <Section title="Your next shift" action="Schedule" onAction={() => router.push('/schedule')} />
-          {scheduled[0] ? <ShiftCard shift={scheduled[0]} now={now} /> : <Empty title="No upcoming shifts assigned." detail="Check your calendar for assignments." action="View calendar" onAction={() => router.push('/schedule')} />}
-        </View>
-        <View style={{ flex: desktop ? 1 : undefined, width: desktop ? undefined : '100%', minWidth: 0, flexShrink: 0 }}>
-          <Section title="Your tasks" style={desktop ? { minHeight: 48 } : undefined} />
-          <TaskList workerId={selectedWorkerId} admin={false} />
+
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginBottom: 18 }}>{metrics.map((metric, index) => <View key={metric.label} style={{ flexGrow: 1, flexBasis: compactMetrics ? '46%' : '22%', minWidth: 0 }}><MetricCard {...metric} delay={90 + index * 40}>{index === 3 && admin && <Sparkline values={week.map(item => item.earningsCents)} />}</MetricCard></View>)}</View>
+      {admin && <ArrivalAttention issues={arrivalIssues} now={now} />}
+
+      <View style={{ flexDirection: columns ? 'row' : 'column', gap: 18, alignItems: 'stretch', marginBottom: 18 }}>
+        <BentoCard delay={180} style={{ flex: columns ? 1.6 : undefined }}><ActivityChart days={week} currency={currency} admin={admin} /></BentoCard>
+        <BentoCard delay={220} style={{ flex: columns ? 1 : undefined }}>
+          <BentoTitle title={admin ? 'Keep things moving' : 'Make it a good week'} detail={admin ? 'The next steps for your team' : 'Everything you need, close at hand'} />
+          <View style={{ gap: 12 }}>
+            {admin ? <><DashboardAction label="Team tasks" detail={`${pendingTasks} ${t('tasks awaiting completion')}`} icon={<ListChecks size={19} color={C.green} />} onPress={() => router.push('/tasks')} /><DashboardAction label="Work requests" detail={pendingRequests ? `${pendingRequests} ${t('work requests awaiting review')}` : 'All caught up'} icon={<CheckCheck size={19} color={C.green} />} onPress={() => router.push('/requests')} /><DashboardAction label="Review time records" detail="Hours, corrections, and approvals" icon={<Clock3 size={19} color={C.green} />} onPress={() => router.push('/time')} /></> : <><DashboardAction label="Your schedule" detail={`${scheduled.length} ${t('Upcoming shifts').toLowerCase()}`} icon={<CalendarDays size={19} color={C.green} />} onPress={() => router.push('/schedule')} /><DashboardAction label="Your requests" detail="Leave, corrections, and updates" icon={<CheckCheck size={19} color={C.green} />} onPress={() => router.push('/requests')} /><DashboardAction label="Your ID" detail="Show your code to your manager" icon={<QrCode size={19} color={C.green} />} onPress={() => router.push('/my-code')} /></>}
+          </View>
+        </BentoCard>
+      </View>
+
+      <View style={{ flexDirection: columns ? 'row' : 'column', alignItems: 'flex-start', gap: 18 }}>
+        <BentoCard delay={260} style={{ flex: columns ? 1.6 : undefined, width: columns ? undefined : '100%' }}>
+          <BentoTitle title={admin ? 'Coming up next' : 'Your next shifts'} detail="A little clarity for the days ahead" action="Schedule" onAction={() => router.push('/schedule')} />
+          {scheduled.length ? <View style={{ gap: 12 }}>{scheduled.slice(0, 4).map(shift => <ShiftCard key={shift.id} shift={shift} compact now={now} />)}</View> : <View style={{ paddingVertical: 20 }}><View style={{ width: 50, height: 50, borderRadius: 16, backgroundColor: C.mint, justifyContent: 'center', alignItems: 'center', marginBottom: 18 }}><CalendarDays size={23} color={C.green} /></View><Text style={{ fontSize: 19, color: C.ink, marginBottom: 9 }}>{admin ? 'Make space for great work.' : 'Your schedule is clear.'}</Text><Text style={{ color: C.muted, fontSize: 13, lineHeight: 21, marginBottom: 22 }}>{admin ? 'Create your first shift and give your team a clear plan.' : 'Your assigned shifts will appear here as your team plans ahead.'}</Text><DashboardAction label={admin ? 'Create shift' : 'View schedule'} icon={<ArrowUpRight size={17} color={C.green} />} onPress={() => router.push(admin ? '/new-shift' : '/schedule')} /></View>}
+        </BentoCard>
+        <View style={{ flex: columns ? 1 : undefined, width: columns ? undefined : '100%', gap: 18 }}>
+          <BentoCard delay={300}>{admin ? <><BentoTitle title={activeWorkers.length ? 'Your team, connected' : 'Build your first team'} detail={activeWorkers.length ? 'People make the plan work' : 'A workspace is better with your crew'} /><Text style={{ color: C.muted, fontSize: 13, lineHeight: 21, marginBottom: 20 }}>{activeWorkers.length ? 'Reach your people or check them in when they arrive.' : 'Add a team, invite your people, and bring your first plan to life.'}</Text><View style={{ gap: 10 }}><DashboardAction label={activeWorkers.length ? 'Contact team' : 'Add your first team'} icon={<UsersRound size={19} color={C.green} />} onPress={() => router.push('/team')} /><DashboardAction label="Scan worker" icon={<ScanLine size={19} color={C.green} />} onPress={() => router.push('/scan-worker')} /></View></> : <><BentoTitle title="Your tasks" detail={pendingTasks ? `${pendingTasks} ${t('tasks awaiting completion')}` : 'A clear view of what’s next'} /><TaskList workerId={selectedWorkerId} admin={false} /></>}</BentoCard>
         </View>
       </View>
-    </>}
+    </DashboardMotion>
   </Screen>;
 }

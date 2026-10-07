@@ -1,8 +1,18 @@
 # Tempo Workforce: data loading and sync optimization
 
-**Status:** Technical proposal; no application code changes are included here.
-**Baseline reviewed:** 2026-10-02
+**Status:** Launch optimization plan. The first compatibility-safe sync reduction is implemented locally; the normalized cutover and live deployment are pending.
+**Baseline reviewed:** 2026-10-07 source. The companion audit is a 2026-10-02 snapshot and predates task, request, and correction features.
 **Scope:** Reduce unnecessary requests, response bytes, database scans/writes, client parsing, and history growth.
+
+## Launch decision
+
+The target architecture below remains the right long-term direction, but the original rollout order was too aggressive for a project with live firm data. Do not turn off the old workspace data path before an equivalent, tested path exists for every active screen and every supported app version. Use **expand → backfill → compare → switch by domain → retire**. Keep the legacy JSON read-only during a verified rollback window; removing it is a separate decision after live data and pay parity checks.
+
+The first local step, `supabase/20261007_sync_revisions.sql`, adds small section change counters without changing existing data. The client can then poll only those counters once per minute while foregrounded, refresh a changed section, and use changes to the tiny revision table for prompt invalidation. Task proof bytes are fetched only when the photo is opened. This reduces idle requests and repeated media transfer, but **it does not solve the expensive full workspace read or shared-row write when many workers punch at once**. The normalized cutover below remains required before claiming that the database scales to many firms.
+
+Apply the SQL before releasing a client that depends on it. The new client retains a slower legacy refresh if the SQL is absent; old clients continue to use existing RPCs. Do not apply the migration to the live Supabase project until the migration and role checks have been rehearsed on a disposable copy and a backup/restore has been verified.
+
+**Rollback for this first step:** redeploy the previous client if the new refresh path misbehaves. Leave the additive counters and RPCs in place while any upgraded client is active; they do not replace or delete source records. If the counters themselves cause measurable write contention, disable their triggers in a controlled database change after clients have returned to the legacy path. Recheck that punches, approvals, tasks, and requests still save before closing the incident. Do not drop the old JSON or inline proof fields in this step.
 
 ## Recommendation
 
@@ -16,7 +26,7 @@ The strongest practical design for this app is:
 
 This is more technically sound than merely changing the 12-second timer or caching the existing full JSON response. The change that makes it scale is changing what the database can query independently; realtime and client caching then keep those smaller reads current.
 
-## Current implementation
+## Baseline implementation before the first local change
 
 The online provider in [src/lib/online-store.tsx](../src/lib/online-store.tsx):
 
@@ -25,6 +35,8 @@ The online provider in [src/lib/online-store.tsx](../src/lib/online-store.tsx):
 - Applies the response to provider state even if its version/data is unchanged.
 - Loads the three snapshots again after punch, break, and time-approval actions.
 - Listens for message changes through Realtime, then fetches the full message list again.
+
+The newer code also has a shared-task poller (10 seconds) and a request poller (20 seconds). `tempo_task_list()` returned full proof photos inline, with each photo allowed up to 2,000,000 text characters. Task and request lists are unbounded. The first local sync change removes repeated full-list polling on unchanged revisions and fetches task proof on demand; bounded task/request pages and object storage are still required. The correction flow now records originals in `tempo_review_audit` while replacing the active punch array, so its audit and pay semantics must be preserved during migration.
 
 The main workspace snapshot in [supabase/20260929_tempo.sql](../supabase/20260929_tempo.sql) reads one workspace JSON document. Workers, shifts, and punches are arrays inside that document. Admin saves send the full state back for replacement with an expected-version check. Punch writes append to the punches array while locking the workspace row and scanning that row's arrays.
 
@@ -89,13 +101,14 @@ Use cursor/keyset pagination for growing datasets. A cursor should contain the f
 
 Move the following collections out of the workspace JSON document into tenant-scoped rows:
 
-- Workers and teams.
+- Workers, teams, and saved sites/templates.
 - Sites.
 - Shifts and shift assignments.
 - Punch events and current attendance state.
 - Break events.
 - Time approvals.
 - Messages and notifications.
+- Tasks, requests, and correction audit records.
 
 Keep workspace settings small. Add foreign keys and tenant-aware uniqueness constraints so a shift cannot accidentally reference a worker from another workspace. Query by workspace and the screen's date/entity filters.
 
@@ -123,7 +136,7 @@ This is a focused event ledger for time punches, not a requirement to event-sour
 
 ### Move profile images out of the database document
 
-Store compressed photos as private object files. Keep a small object key and metadata on the worker row. Load thumbnails only when a visible screen needs them; never include photo bytes in a roster, punch, or attendance response. Preserve workspace-scoped authorization.
+Store compressed profile and task-proof photos as private object files. Keep a small object key and metadata on the related row. Load thumbnails or proof only when a visible screen needs them; never include photo bytes in routine list, roster, punch, or attendance responses. Preserve workspace-scoped authorization. Migrate existing inline bytes with a verified, resumable export/upload process before deleting any originals.
 
 ### Handle history and archiving explicitly
 
@@ -201,6 +214,7 @@ Current polling arithmetic:
 - A 12-second interval is 5 polling cycles per minute.
 - One client mounted 8 hours/day for 22 workdays makes about 52,800 polling cycles per month.
 - With three snapshot RPC calls per cycle, that is about 158,400 snapshot RPCs per client-month, before post-action reloads.
+- The later task and request features add roughly 6 and 3 full-list calls per minute while mounted, respectively. Together with the workspace loop, the prior foreground cadence is about **24 data RPCs/minute per client**. The first local change replaces that idle cadence with about **3 small revision checks/minute** and no unchanged full-list or full-workspace response. Realtime events and actual changes add requests; this is code-path arithmetic, not a live usage measurement.
 - This is the code's request cadence, not measured traffic. Actual bytes depend on role, data size, compression, and how long clients stay active.
 
 The target model is:
@@ -251,31 +265,34 @@ The desired measurable result is no full-snapshot transfer on an unchanged scree
 
 ## Implementation order
 
-### First: measure and set contracts
+### First: measure, protect live data, and set contracts
 
 1. Instrument current snapshot sizes, request counts, latency, and workspace-state sizes.
-2. Write the field/date/sort/page contract for every screen.
-3. Decide whether near-real-time updates are actually needed per screen.
+2. Export and restore a disposable copy of live data, including photos and correction audits. Record per-workspace row counts and pay totals.
+3. Write the field/date/sort/page contract for every screen, including tasks and requests; decide which screens need near-real-time updates.
+4. Run the existing migration/security suite and real-session role checks on a disposable Supabase project.
 
-### Second: stop repeated full reads
+### Second: reduce idle transfer without changing storage
 
-1. Remove the three-RPC 12-second full-snapshot loop.
-2. Use initial load, screen focus, app resume, and revision reconciliation.
-3. Bound messages, breaks, time history, and other event reads.
-4. Make mutation responses return only the changed record/result.
+1. Apply the additive section-revision migration, then release the client that checks it in the foreground and on resume. Keep a slow reconciliation check for missed Realtime events.
+2. Fetch only changed sections; do not reload workspace JSON for a message, task, break, or approval change.
+3. Fetch task proof only when opened. Add bounded pages for messages, tasks, requests, breaks, notifications, and time history.
+4. Measure the reduction in requests, egress, JSON parsing, and p95 latency. This stage is an immediate cost reduction, not the final database architecture.
 
-### Third: make partial loading real in Postgres
+### Third: normalize and switch one domain at a time
 
-1. Add normalized, indexed tables and tenant-safe relationships.
-2. Migrate worker, shift, assignment, punch, break, approval, and message reads/writes.
-3. Add private section invalidation with a revision fallback.
-4. Move photos to private object storage and load thumbnails on demand.
-5. Remove legacy JSON state after parity and rollback checks.
+1. Add tracked migrations for workers, sites, shifts, assignments, punches/current attendance, and any still-growing JSON fields. Reuse existing relational tables for breaks, approvals, messages, tasks, requests, and audits; do not duplicate them.
+2. Backfill from the live JSON in small, idempotent batches. Preserve IDs, timezone/work-date semantics, rate-at-check-in, existing correction originals, approvals, archived status, and assignment links. Compare counts and historical pay against the old path.
+3. Route each domain's writes through one transactional server path. During mixed-version operation, keep old and new representations consistent in the same database transaction; never ask clients to dual-write.
+4. Add bounded, role-specific queries and switch home, schedule, attendance, time/pay, directory, and detail screens one by one. A successful screen switch must remove its dependency on the full workspace snapshot.
+5. Enforce the one-open-shift invariant with a worker-scoped row/constraint and append immutable punch and correction events with idempotency keys. Prove concurrent scans and retries cannot duplicate or overlap attendance.
+6. Move profile and proof photos to private object storage with resumable migration and on-demand delivery. Add private Broadcast invalidation only after targeted writes are stable; keep revision reconciliation for missed events.
+7. Keep the legacy JSON read-only through a tested rollback window. Remove it only after old clients are retired, parity is proved, and a separate retention decision authorizes contraction.
 
-### Fourth: prove it under load
+### Fourth: prove it under load before launch
 
 1. Run SQL query-plan checks on representative data.
-2. Exercise large rosters, deep history, concurrent punches, concurrent admin edits, missed Realtime events, reconnects, and stale clients.
+2. Exercise many workspaces, large rosters, deep history, concurrent punches, concurrent admin edits, missed Realtime events, reconnects, stale clients, and mixed old/new client versions.
 3. Record the new per-screen payloads and p95 query/client timings against the measured baseline.
 
 ## Technical references

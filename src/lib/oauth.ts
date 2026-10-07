@@ -1,36 +1,61 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Provider, SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import { createPkceClient } from './supabase';
 
-// OAuth sign-in through Supabase Auth. Off unless EXPO_PUBLIC_AUTH_PROVIDERS lists
-// providers that are also enabled in the Supabase dashboard, e.g. "google,apple".
-export type OAuthProvider = Extract<Provider, 'google' | 'apple' | 'azure' | 'github'>;
-const SUPPORTED: OAuthProvider[] = ['google', 'apple', 'azure', 'github'];
-const configuredProviders: string = process.env.EXPO_PUBLIC_AUTH_PROVIDERS ?? '';
-export const oauthProviders: OAuthProvider[] = configuredProviders
-  .split(',').map((item: string) => item.trim().toLowerCase()).filter((item: string): item is OAuthProvider => SUPPORTED.includes(item as OAuthProvider));
-export const providerLabel: Record<OAuthProvider, string> = { google: 'Google', apple: 'Apple', azure: 'Microsoft', github: 'GitHub' };
+const WEB_PKCE_KEY = 'tempo-oauth-pkce-web';
 
-// Password sign-up stores admin/worker intent in user metadata. OAuth cannot set
-// metadata, so the intent is kept on the device until the first session loads.
-const INTENT_KEY = 'tempo-oauth-intent';
-type Intent = 'admin' | 'worker';
+function webPkceClient() {
+  const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key || typeof window === 'undefined') return null;
+  return createClient(url, key, { auth: {
+    flowType: 'pkce', storage: window.sessionStorage, storageKey: WEB_PKCE_KEY,
+    persistSession: true, autoRefreshToken: false, detectSessionInUrl: false,
+  } });
+}
 
-export async function signInWithOAuth(client: SupabaseClient, provider: OAuthProvider, intent?: Intent): Promise<void> {
-  if (intent) await AsyncStorage.setItem(INTENT_KEY, intent).catch(() => {});
+export async function finishWebOAuth(client: SupabaseClient): Promise<boolean> {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
+  const location = new URL(window.location.href);
+  const code = location.searchParams.get('code');
+  const failure = location.searchParams.get('error_description') ?? location.searchParams.get('error');
+  if (!code && !failure) return false;
+  location.searchParams.delete('code');
+  location.searchParams.delete('error');
+  location.searchParams.delete('error_description');
+  window.history.replaceState(null, '', `${location.pathname}${location.search}${location.hash}`);
+  if (failure) {
+    throw new Error('Google sign-in was cancelled or could not be completed.');
+  }
+  const pkce = webPkceClient();
+  if (!pkce) throw new Error('Online sign-in is not configured.');
+  const { data, error } = await pkce.auth.exchangeCodeForSession(code!);
+  if (error || !data.session) {
+    throw new Error('Google sign-in could not be completed. Please try again.');
+  }
+  window.sessionStorage.removeItem(WEB_PKCE_KEY);
+  const { error: sessionError } = await client.auth.setSession({ access_token: data.session.access_token, refresh_token: data.session.refresh_token });
+  if (sessionError) {
+    throw new Error('Google sign-in could not be completed. Please try again.');
+  }
+  return true;
+}
+
+export async function signInWithGoogle(client: SupabaseClient): Promise<void> {
   if (Platform.OS === 'web') {
-    const { error } = await client.auth.signInWithOAuth({ provider, options: { redirectTo: `${window.location.origin}/` } });
+    const pkce = webPkceClient();
+    if (!pkce) throw new Error('Online sign-in is not configured.');
+    const { error } = await pkce.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${window.location.origin}/start` } });
     if (error) throw error;
     return;
   }
   const redirectTo = Linking.createURL('/');
   const pkce = createPkceClient();
   if (!pkce) throw new Error('Online sign-in is not configured.');
-  const { data, error } = await pkce.auth.signInWithOAuth({ provider, options: { redirectTo, skipBrowserRedirect: true } });
+  const { data, error } = await pkce.auth.signInWithOAuth({ provider: 'google', options: { redirectTo, skipBrowserRedirect: true } });
   if (error) throw error;
-  // Loaded lazily so a native build without the module still starts.
   const WebBrowser = await import('expo-web-browser');
   const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
   if (result.type !== 'success') return;
@@ -38,7 +63,7 @@ export async function signInWithOAuth(client: SupabaseClient, provider: OAuthPro
   const params = new URLSearchParams(returned.hash.slice(1));
   returned.searchParams.forEach((value, name) => params.set(name, value));
   const failure = params.get('error_description') ?? params.get('error');
-  if (failure) throw new Error(failure);
+  if (failure) throw new Error('Google sign-in could not be completed.');
   // Only a PKCE code is accepted; tokens placed directly in the URL are ignored.
   const code = params.get('code');
   if (!code) throw new Error('Sign-in was not completed.');
@@ -46,14 +71,4 @@ export async function signInWithOAuth(client: SupabaseClient, provider: OAuthPro
   if (exchangeError || !exchanged.session) throw exchangeError ?? new Error('Sign-in was not completed.');
   const { error: sessionError } = await client.auth.setSession({ access_token: exchanged.session.access_token, refresh_token: exchanged.session.refresh_token });
   if (sessionError) throw sessionError;
-}
-
-// Returns the intent chosen before an OAuth redirect and saves it to the account,
-// so later sign-ins on any device behave like a password account.
-export async function consumeOAuthIntent(client: SupabaseClient): Promise<Intent | undefined> {
-  const stored = await AsyncStorage.getItem(INTENT_KEY).catch(() => null);
-  if (stored !== 'admin' && stored !== 'worker') return undefined;
-  await AsyncStorage.removeItem(INTENT_KEY).catch(() => {});
-  await client.auth.updateUser({ data: { tempo_intent: stored } }).catch(() => {});
-  return stored;
 }
